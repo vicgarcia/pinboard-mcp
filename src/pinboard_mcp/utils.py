@@ -1,5 +1,75 @@
 from typing import Optional
+from urllib.parse import urlparse
 from dateutil import parser as date_parser
+
+
+def validate_url(url: Optional[str]) -> str:
+    '''
+    validate and normalize a URL for bookmark creation.
+    
+    args:
+        url: the URL to validate
+        
+    returns:
+        normalized URL string
+        
+    raises:
+        ValueError: if the URL is invalid with descriptive message
+    '''
+    if not url:
+        raise ValueError("URL is required and cannot be empty")
+    
+    # strip whitespace and convert to string
+    url_str = str(url).strip()
+    
+    if not url_str:
+        raise ValueError("URL cannot be empty or whitespace only")
+    
+    # check minimum length for a valid URL
+    if len(url_str) < 7:  # http:// is minimum
+        raise ValueError("URL is too short to be valid")
+    
+    try:
+        # parse the URL
+        parsed = urlparse(url_str)
+        
+        # validate scheme
+        if not parsed.scheme:
+            raise ValueError("URL must include a protocol (http:// or https://)")
+        
+        if parsed.scheme.lower() not in ['http', 'https']:
+            raise ValueError(f"Unsupported URL scheme '{parsed.scheme}'. Only HTTP and HTTPS are supported")
+        
+        # validate netloc (domain)
+        if not parsed.netloc:
+            raise ValueError("URL must include a valid domain name")
+        
+        # check for suspicious characters in domain
+        if any(char in parsed.netloc for char in [' ', '\t', '\n', '\r']):
+            raise ValueError("URL domain contains invalid characters")
+        
+        # basic domain format check
+        if '.' not in parsed.netloc and 'localhost' not in parsed.netloc.lower():
+            raise ValueError("URL domain appears to be malformed")
+        
+        # reconstruct normalized URL
+        normalized_url = f"{parsed.scheme}://{parsed.netloc}"
+        if parsed.path:
+            normalized_url += parsed.path
+        if parsed.params:
+            normalized_url += f";{parsed.params}"
+        if parsed.query:
+            normalized_url += f"?{parsed.query}"
+        if parsed.fragment:
+            normalized_url += f"#{parsed.fragment}"
+            
+        return normalized_url
+        
+    except ValueError:
+        # re-raise our custom validation errors
+        raise
+    except Exception as e:
+        raise ValueError(f"Invalid URL format: {e}")
 
 
 def validate_date_range(start_date: Optional[str], end_date: Optional[str]) -> tuple:
