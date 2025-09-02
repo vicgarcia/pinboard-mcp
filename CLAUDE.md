@@ -1,7 +1,7 @@
 # Claude Code Session Documentation
 
 ## Project Overview
-Pinboard MCP Server - A Python MCP (Model Context Protocol) server that provides read-only access to Pinboard.in bookmarks for Claude Desktop integration.
+Pinboard MCP Server - A minimal Python MCP (Model Context Protocol) server for accessing Pinboard.in bookmarks directly in Claude Desktop. Intentionally focused on basic bookmark operations (get, add, update) to keep context usage low and let Claude handle the interpretation work.
 
 ## Project Structure
 ```
@@ -9,7 +9,9 @@ pinboard-mcp/
 ├── src/
 │   └── pinboard_mcp/
 │       ├── __init__.py          # Package initialization
-│       └── server.py            # Main MCP server implementation
+│       ├── server.py            # Main MCP server implementation with 3 core tools
+│       ├── pinboard.py          # Pinboard API client and utilities
+│       └── utils.py             # Validation and helper functions
 ├── pyproject.toml              # Python project configuration
 ├── Dockerfile                  # Container configuration
 ├── .dockerignore              # Docker ignore patterns
@@ -42,11 +44,11 @@ python -c "from pinboard_mcp.server import validate_date_range; print('✓ Impor
 
 ### Docker
 ```bash
-# Build Docker image
-docker build -t pinboard-mcp .
+# Build Docker image using build script
+./build.sh
 
-# Run with environment variable
-docker run -e PINBOARD_TOKEN="username:token" pinboard-mcp
+# Or manually:
+docker build -t pinboard-mcp:local .
 ```
 
 ### Testing & Validation
@@ -72,16 +74,63 @@ Retrieve bookmarks from Pinboard within a specified date range.
 - `start_date` (optional): Start date in YYYY-MM-DD format
 - `end_date` (optional): End date in YYYY-MM-DD format  
 - `tags` (optional): Comma-separated tags to filter by
-- `limit` (optional): Maximum bookmarks to return (default: 20, max: 100)
+- `limit` (optional): Maximum bookmarks to return (default: 200, max: 500)
 
 **Constraints:**
 - Date range cannot exceed 90 days
 - Rate limited to respect Pinboard's 3-second API limit
-- Read-only access only
+
+### `update_bookmark`
+Update a bookmark's properties by URL.
+
+**Parameters:**
+- `url` (required): The URL of the bookmark to update
+- `title` (optional): New bookmark title
+- `description` (optional): New bookmark description
+- `tags` (optional): Comma-separated tags to set
+- `private` (optional): Boolean - true for private, false for public
+- `toread` (optional): Boolean - mark as to-read (true/false)
+
+**Usage Notes:**
+- URL serves as the unique identifier for the bookmark
+- At least one optional parameter must be provided
+- Returns the updated bookmark data and list of changes applied
+- Rate limited to respect Pinboard's 3-second API limit
+
+### `add_bookmark`
+Create a new bookmark in Pinboard.
+
+**Parameters:**
+- `url` (required): The web address to bookmark
+- `title` (required): The bookmark title/name
+- `description` (optional): Extended description or notes
+- `tags` (optional): Comma-separated tags to set
+- `private` (optional): Boolean - true for private, false for public (default: false)
+- `toread` (optional): Boolean - mark as to-read (default: false)
+
+**Validation Features:**
+- Streamlined validation trusting Pinboard API for complex checks
+- Basic required field validation (URL and title)
+- Tag parsing and normalization to lowercase
+- Rate limited to respect Pinboard's 3-second API limit
+
+**Returns:** Created bookmark data with success confirmation
+
+~~### `get_tags` (Removed)~~
+~~Retrieve all tags from Pinboard with usage counts - removed to focus on core bookmark operations.~~
 
 ## Claude Desktop Integration
 
-Add to Claude Desktop MCP settings:
+### Local Build Setup
+
+First, clone and build the Docker image:
+```bash
+git clone https://github.com/vicgarcia/pinboard-mcp
+cd pinboard-mcp
+docker build -t pinboard-mcp:local .
+```
+
+Then add to Claude Desktop MCP settings:
 ```json
 {
   "mcpServers": {
@@ -92,12 +141,14 @@ Add to Claude Desktop MCP settings:
         "-i",
         "--rm",
         "-e", "PINBOARD_TOKEN=your-username:your-api-token",
-        "pinboard-mcp"
+        "pinboard-mcp:local"
       ]
     }
   }
 }
 ```
+
+Replace `your-username:your-api-token` with your actual Pinboard token from [settings](https://pinboard.in/settings/password).
 
 ## Implementation Notes
 
@@ -107,35 +158,44 @@ Add to Claude Desktop MCP settings:
 - **STDIO Transport**: Default for Claude Desktop compatibility
 - **Rate Limiting**: 3-second delays between API calls (Pinboard requirement)
 - **90-Day Limit**: Enforced to prevent excessive API usage
-- **Read-Only**: Security constraint, no write operations
+- **Selective Write Access**: Creation and update operations only (no deletion for safety)
 
 ### Code Quality Features
 - Type hints throughout
-- Comprehensive error handling
-- Input validation and sanitization
-- Structured logging with configurable levels
+- Consistent error handling patterns
+- Streamlined validation (trusting API where appropriate)
+- Structured logging with configurable levels (all lowercase except proper names)
+- Consistent variable naming (`pinboard_client` for clarity)
+- Harmonized code patterns across all functions
 - Non-root Docker execution
 - Environment-based configuration
 
-### Key Functions (`src/pinboard_mcp/server.py`)
-- `setup_logging()`: Configures console logging
-- `rate_limit()`: Enforces 3-second API delays
+### Key Functions
+**`src/pinboard_mcp/pinboard.py`:**
 - `get_pinboard_client()`: Creates authenticated Pinboard client
-- `validate_date_range()`: Validates dates and 90-day limit
+- `rate_limit()`: Enforces 3-second API delays
 - `format_bookmark_response()`: Formats bookmark data for response
-- `get_bookmarks()`: Main MCP tool implementation
-- `run_server()`: Main server runner with connection testing
+
+**`src/pinboard_mcp/server.py`:**
+- `get_bookmarks()`: Retrieves bookmarks with filtering and date range validation
+- `add_bookmark()`: Creates new bookmarks with streamlined validation
+- `update_bookmark()`: Updates bookmark properties by URL with change tracking
+
+**`src/pinboard_mcp/utils.py`:**
+- `validate_url()`: Comprehensive URL validation and normalization (available but unused after streamlining)
+- `validate_date_range()`: Validates dates and enforces 90-day limit
 
 ## Session History
 
 ### Milestone 1 Completed ✅
 1. **Knowledge Review**: Studied FastMCP and Pinboard API documentation
 2. **Architecture Design**: Created PRD with technical requirements  
-3. **Initial Implementation**: Built working server with single tool
+3. **Initial Implementation**: Built working server with comprehensive bookmark tools
 4. **Docker Configuration**: Containerized with security best practices
 5. **Code Refactoring**: Moved to professional src/ folder structure
 6. **Entrypoint Setup**: Added CLI command via pyproject.toml
-7. **Testing**: Validated date logic, imports, and Docker build
+7. **Portfolio Optimization**: Harmonized code patterns, consistent naming, streamlined validation
+8. **Testing**: Validated date logic, imports, and Docker build
 
 ### Technical Achievements
 - ✅ Professional Python package structure
@@ -146,6 +206,13 @@ Add to Claude Desktop MCP settings:
 - ✅ Environment-based configuration
 - ✅ Error handling for all failure modes
 - ✅ Logging with configurable levels
+- ✅ Bookmark update functionality with URL-based identification
+- ✅ Multi-property updates (title, description, tags, privacy, to-read)
+- ✅ Detailed change tracking and response formatting
+- ✅ Bookmark creation with streamlined validation
+- ✅ Portfolio-ready code with consistent patterns and naming
+- ✅ Harmonized error handling and response formatting
+- ✅ Clean, readable codebase optimized for professional presentation
 
 ## Future Development
 
@@ -162,10 +229,10 @@ Add to Claude Desktop MCP settings:
 - Connection pooling for better performance
 
 ## Known Limitations
-- Read-only access (by design)
-- 90-day date range limit (configurable if needed)
+- No bookmark deletion (by design - prevents accidental data loss)
+- 90-day date range limit for retrieval (configurable if needed)
 - Single concurrent API call (due to rate limiting)
-- No bookmark modification capabilities
+- URL-based identification required for updates
 - Requires valid Pinboard account and API token
 
 ## Troubleshooting
@@ -181,6 +248,30 @@ Set `LOG_LEVEL=DEBUG` for detailed logging including API calls and rate limiting
 
 ---
 
-**Project Status**: ✅ Milestone 1 Complete - Production Ready  
-**Last Updated**: Session end (graceful conclusion)  
-**Next Session**: Ready for Milestone 2 development or production deployment
+## Code Conventions Established
+
+### Naming Conventions
+- **Variable naming**: Descriptive names (`pinboard_client` not `pb` or `client`)
+- **Function organization**: Consistent patterns across all MCP tools
+- **Response formatting**: Unified structure for all API responses
+
+### Logging Standards
+- **Message format**: All log messages start lowercase except proper names (Pinboard, API, URL, MCP)
+- **Log levels**: DEBUG for detailed API calls, INFO for operations, ERROR for failures
+- **Consistency**: Same logging pattern across all modules
+
+### Error Handling Philosophy
+- **Streamlined validation**: Trust Pinboard API for complex validation, validate only essentials
+- **Consistent responses**: All errors return `{"error": "message", "success": False}`
+- **Graceful failures**: Detailed error messages without exposing internals
+
+### Code Organization
+- **Three core tools**: `get_bookmarks`, `add_bookmark`, `update_bookmark`
+- **Focused functionality**: Removed `get_tags` to concentrate on core operations
+- **Harmonized patterns**: Same structure and error handling across all functions
+
+---
+
+**Project Status**: ✅ Milestone 1 Complete - Portfolio Ready  
+**Last Updated**: Production-ready with streamlined README and local Docker build workflow  
+**Next Session**: Ready for deployment and real-world usage analysis
