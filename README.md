@@ -15,7 +15,7 @@ Once set up, you can ask Claude things like:
 
 clone the repo
 ```
-git clone https://github.com/vicgarcia/pinboard-map.git
+git clone https://github.com/vicgarcia/pinboard-mcp.git
 cd pinboard-mcp
 ```
 
