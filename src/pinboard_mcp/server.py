@@ -275,3 +275,44 @@ def add_bookmark(
     except Exception as e:
         logger.error(f"error creating bookmark: {e}")
         return {'error': str(e), 'success': False}
+
+
+@mcp.tool
+def get_tags() -> Dict[str, Any]:
+    '''
+    retrieve all tags from pinboard with usage counts.
+
+    returns:
+        dictionary containing tags and metadata
+    '''
+    try:
+        pinboard_client = get_pinboard_client()
+
+        logger.info('fetching tags from Pinboard')
+
+        # fetch tags from Pinboard
+        rate_limit()
+        tags_raw = pinboard_client.tags.get()
+
+        # format tags for response - tags_raw is a dict with tag names as keys and counts as values
+        formatted_tags = [
+            {'tag': tag_name, 'count': count}
+            for tag_name, count in tags_raw.items()
+        ]
+
+        # sort by count descending, then by tag name
+        formatted_tags.sort(key=lambda x: (-x['count'], x['tag']))
+
+        # build response
+        response = {
+            'count': len(formatted_tags),
+            'tags': formatted_tags,
+            'success': True
+        }
+
+        logger.info(f'successfully retrieved {len(formatted_tags)} tags')
+        return response
+
+    except Exception as e:
+        logger.error(f'error retrieving tags: {e}')
+        return {'error': str(e), 'success': False}

@@ -1,7 +1,7 @@
 # Claude Code Session Documentation
 
 ## Project Overview
-Pinboard MCP Server - A minimal Python MCP (Model Context Protocol) server for accessing Pinboard.in bookmarks directly in Claude Desktop. Intentionally focused on basic bookmark operations (get, add, update) to keep context usage low and let Claude handle the interpretation work.
+Pinboard MCP Server - A minimal Python MCP (Model Context Protocol) server for accessing Pinboard.in bookmarks directly in Claude Desktop. Intentionally focused on basic bookmark operations (get, add, update, tags) to keep context usage low and let Claude handle the interpretation work.
 
 ## Project Structure
 ```
@@ -9,7 +9,7 @@ pinboard-mcp/
 ├── src/
 │   └── pinboard_mcp/
 │       ├── __init__.py          # Package initialization
-│       ├── server.py            # Main MCP server implementation with 3 core tools
+│       ├── server.py            # Main MCP server implementation with 4 core tools
 │       ├── pinboard.py          # Pinboard API client and utilities
 │       └── utils.py             # Validation and helper functions
 ├── pyproject.toml              # Python project configuration
@@ -116,8 +116,20 @@ Create a new bookmark in Pinboard.
 
 **Returns:** Created bookmark data with success confirmation
 
-~~### `get_tags` (Removed)~~
-~~Retrieve all tags from Pinboard with usage counts - removed to focus on core bookmark operations.~~
+### `get_tags`
+Retrieve all tags from Pinboard with usage counts.
+
+**Parameters:** None
+
+**Returns:**
+- List of all tags sorted by usage count (descending), then alphabetically
+- Each tag includes name and count of bookmarks using it
+- Full response includes total tag count and success status
+
+**Usage Notes:**
+- Returns all tags with no filtering
+- Sorting prioritizes most-used tags first
+- Rate limited to respect Pinboard's 3-second API limit
 
 ## Claude Desktop Integration
 
@@ -180,6 +192,7 @@ Replace `your-username:your-api-token` with your actual Pinboard token from [set
 - `get_bookmarks()`: Retrieves bookmarks with filtering and date range validation
 - `add_bookmark()`: Creates new bookmarks with streamlined validation
 - `update_bookmark()`: Updates bookmark properties by URL with change tracking
+- `get_tags()`: Retrieves all tags with usage counts, sorted by popularity
 
 **`src/pinboard_mcp/utils.py`:**
 - `validate_url()`: Comprehensive URL validation and normalization (available but unused after streamlining)
@@ -213,6 +226,7 @@ Replace `your-username:your-api-token` with your actual Pinboard token from [set
 - ✅ Portfolio-ready code with consistent patterns and naming
 - ✅ Harmonized error handling and response formatting
 - ✅ Clean, readable codebase optimized for professional presentation
+- ✅ Tag retrieval functionality with usage statistics and smart sorting
 
 ## Future Development
 
@@ -266,8 +280,8 @@ Set `LOG_LEVEL=DEBUG` for detailed logging including API calls and rate limiting
 - **Graceful failures**: Detailed error messages without exposing internals
 
 ### Code Organization
-- **Three core tools**: `get_bookmarks`, `add_bookmark`, `update_bookmark`
-- **Focused functionality**: Removed `get_tags` to concentrate on core operations
+- **Four core tools**: `get_bookmarks`, `add_bookmark`, `update_bookmark`, `get_tags`
+- **Focused functionality**: Essential bookmark and tag operations only
 - **Harmonized patterns**: Same structure and error handling across all functions
 
 ---

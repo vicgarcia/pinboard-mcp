@@ -1,6 +1,6 @@
 I've been using pinboard for years to save bookmarks and wanted an easy way to access them directly in Claude Desktop.
 
-The MCP server is intentionally minimal. I expose only the most basic bookmark operations (get, add, update) without any opinionated filtering or analysis features. This keeps the context usage low and lets claude do the interpretation work.
+The MCP server is intentionally minimal. I expose only the most basic bookmark operations (get, add, update, tags) without any opinionated filtering or analysis features. This keeps the context usage low and lets claude do the interpretation work.
 
 Once set up, you can ask Claude things like:
 
@@ -99,6 +99,17 @@ update an existing bookmark by url
 
 **example usage in claude:**
 > "update the bookmark for https://example.com to add the tag 'important'"
+
+### get_tags
+
+retrieve all tags with usage counts
+
+**returns:**
+- list of all tags sorted by usage count (descending)
+- each tag includes name and count of bookmarks using it
+
+**example usage in claude:**
+> "show me all my tags and how often i use them"
 
 ## dev
 
