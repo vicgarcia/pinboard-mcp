@@ -1,6 +1,6 @@
-I've been using pinboard for years to save bookmarks. I've recently been working on a project to explore business operations data from Claude Desktop with an MCP server. Inspired by this, I've been experimenting with ideas for personal productivity tools to build for myself.
+I've been using [Pinboard](https://pinboard.in]) for years to save bookmarks. I've recently been working on a project to explore business operations data from Claude Desktop with an MCP server. Inspired by this, I've been experimenting with ideas for personal productivity tools to build for myself.
 
-This MCP server implements a minimal set of tools for interacting with the pinboard api. There are tools to get/add/update bookmarks and list/rename tags.
+This MCP server implements a minimal set of tools for interacting with the [pinboard api](https://pinboard.in/api). There are tools to get/add/update bookmarks and list/rename tags.
 
 Once set up, you can make queries like:
 
