@@ -1,6 +1,6 @@
 import os
 import time
-from typing import Dict, Any
+from typing import Dict, Any, Optional, List
 import pinboard
 
 import logging
@@ -50,3 +50,26 @@ def format_bookmark_response(bookmark) -> Dict[str, Any]:
         'time': time_str,
         'private': not bookmark.shared,
     }
+
+
+def parse_tags(tags_str: Optional[str]) -> List[str]:
+    ''' parse comma-separated tags string into cleaned list '''
+    if not tags_str:
+        return []
+    return [tag.strip().lower() for tag in tags_str.split(',') if tag.strip()]
+
+
+def format_tags_response(tags_raw: Dict[str, int]) -> List[Dict[str, Any]]:
+    ''' format tags dictionary into sorted list with tag name and count '''
+    formatted_tags = [
+        {'tag': tag_name, 'count': count}
+        for tag_name, count in tags_raw.items()
+    ]
+    # sort by count descending, then by tag name
+    formatted_tags.sort(key=lambda x: (-x['count'], x['tag']))
+    return formatted_tags
+
+
+def normalize_tag(tag: str) -> str:
+    ''' normalize a single tag (strip whitespace and lowercase) '''
+    return tag.strip().lower()

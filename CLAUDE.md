@@ -1,7 +1,7 @@
 # Claude Code Session Documentation
 
 ## Project Overview
-Pinboard MCP Server - A minimal Python MCP (Model Context Protocol) server for accessing Pinboard.in bookmarks directly in Claude Desktop. Intentionally focused on basic bookmark operations (get, add, update, tags) to keep context usage low and let Claude handle the interpretation work.
+Pinboard MCP Server - A minimal Python MCP (Model Context Protocol) server for accessing Pinboard.in bookmarks directly in Claude Desktop. Intentionally focused on basic bookmark and tag operations (get, add, update, tags, rename) to keep context usage low and let Claude handle the interpretation work.
 
 ## Project Structure
 ```
@@ -9,7 +9,7 @@ pinboard-mcp/
 ├── src/
 │   └── pinboard_mcp/
 │       ├── __init__.py          # Package initialization
-│       ├── server.py            # Main MCP server implementation with 4 core tools
+│       ├── server.py            # Main MCP server implementation with 5 core tools
 │       ├── pinboard.py          # Pinboard API client and utilities
 │       └── utils.py             # Validation and helper functions
 ├── pyproject.toml              # Python project configuration
@@ -131,6 +131,29 @@ Retrieve all tags from Pinboard with usage counts.
 - Sorting prioritizes most-used tags first
 - Rate limited to respect Pinboard's 3-second API limit
 
+### `rename_tag`
+Rename a tag across all bookmarks.
+
+**Parameters:**
+- `old_tag` (required): The existing tag name to rename
+- `new_tag` (required): The new tag name
+
+**Validation Features:**
+- Both tags must be non-empty strings
+- Tags are automatically normalized to lowercase
+- Prevents renaming a tag to itself (duplicate check)
+- Rate limited to respect Pinboard's 3-second API limit
+
+**Returns:**
+- Confirmation of old and new tag names
+- Success status and descriptive message
+- Detailed error messages for validation failures
+
+**Usage Notes:**
+- Renames the tag across ALL bookmarks that use it
+- Tag matching is case-insensitive
+- Useful for fixing typos or consolidating similar tags
+
 ## Claude Desktop Integration
 
 ### Local Build Setup
@@ -181,18 +204,25 @@ Replace `your-username:your-api-token` with your actual Pinboard token from [set
 - Harmonized code patterns across all functions
 - Non-root Docker execution
 - Environment-based configuration
+- **Helper functions in pinboard.py**: All formatting/normalization logic centralized for reusability
+- **Clean separation of concerns**: MCP orchestration in server.py, Pinboard-specific logic in pinboard.py
 
 ### Key Functions
+
 **`src/pinboard_mcp/pinboard.py`:**
 - `get_pinboard_client()`: Creates authenticated Pinboard client
 - `rate_limit()`: Enforces 3-second API delays
-- `format_bookmark_response()`: Formats bookmark data for response
+- `format_bookmark_response()`: Formats bookmark objects for MCP responses
+- `parse_tags()`: Parses comma-separated tags into normalized list (lowercase, trimmed)
+- `format_tags_response()`: Formats tags dictionary into sorted list with counts
+- `normalize_tag()`: Normalizes single tag (strip whitespace, lowercase)
 
 **`src/pinboard_mcp/server.py`:**
 - `get_bookmarks()`: Retrieves bookmarks with filtering and date range validation
 - `add_bookmark()`: Creates new bookmarks with streamlined validation
 - `update_bookmark()`: Updates bookmark properties by URL with change tracking
 - `get_tags()`: Retrieves all tags with usage counts, sorted by popularity
+- `rename_tag()`: Renames a tag across all bookmarks with validation
 
 **`src/pinboard_mcp/utils.py`:**
 - `validate_url()`: Comprehensive URL validation and normalization (available but unused after streamlining)
@@ -202,13 +232,15 @@ Replace `your-username:your-api-token` with your actual Pinboard token from [set
 
 ### Milestone 1 Completed ✅
 1. **Knowledge Review**: Studied FastMCP and Pinboard API documentation
-2. **Architecture Design**: Created PRD with technical requirements  
+2. **Architecture Design**: Created PRD with technical requirements
 3. **Initial Implementation**: Built working server with comprehensive bookmark tools
 4. **Docker Configuration**: Containerized with security best practices
 5. **Code Refactoring**: Moved to professional src/ folder structure
 6. **Entrypoint Setup**: Added CLI command via pyproject.toml
 7. **Portfolio Optimization**: Harmonized code patterns, consistent naming, streamlined validation
 8. **Testing**: Validated date logic, imports, and Docker build
+9. **Tag Operations**: Added get_tags and rename_tag functionality
+10. **Helper Functions Refactoring**: Extracted formatting logic to pinboard.py for clean separation of concerns
 
 ### Technical Achievements
 - ✅ Professional Python package structure
@@ -227,6 +259,10 @@ Replace `your-username:your-api-token` with your actual Pinboard token from [set
 - ✅ Harmonized error handling and response formatting
 - ✅ Clean, readable codebase optimized for professional presentation
 - ✅ Tag retrieval functionality with usage statistics and smart sorting
+- ✅ Tag rename functionality with normalization and validation
+- ✅ **DRY refactoring**: Extracted helper functions (parse_tags, format_tags_response, normalize_tag)
+- ✅ **Separation of concerns**: MCP tools focus on orchestration, helpers handle formatting
+- ✅ **Reusable components**: Helper functions used across multiple tools for consistency
 
 ## Future Development
 
@@ -280,7 +316,7 @@ Set `LOG_LEVEL=DEBUG` for detailed logging including API calls and rate limiting
 - **Graceful failures**: Detailed error messages without exposing internals
 
 ### Code Organization
-- **Four core tools**: `get_bookmarks`, `add_bookmark`, `update_bookmark`, `get_tags`
+- **Five core tools**: `get_bookmarks`, `add_bookmark`, `update_bookmark`, `get_tags`, `rename_tag`
 - **Focused functionality**: Essential bookmark and tag operations only
 - **Harmonized patterns**: Same structure and error handling across all functions
 

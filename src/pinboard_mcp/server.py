@@ -1,6 +1,13 @@
 from typing import Optional, Dict, Any
 from fastmcp import FastMCP
-from .pinboard import get_pinboard_client, rate_limit, format_bookmark_response
+from .pinboard import (
+    get_pinboard_client,
+    rate_limit,
+    format_bookmark_response,
+    parse_tags,
+    format_tags_response,
+    normalize_tag
+)
 from .utils import validate_date_range
 
 import logging
@@ -36,7 +43,7 @@ def get_bookmarks(
         parsed_start, parsed_end = validate_date_range(start_date, end_date)
 
         # parse tags
-        tag_list = [tag.strip() for tag in tags.split(',') if tag.strip()] if tags else []
+        tag_list = parse_tags(tags)
 
         pinboard_client = get_pinboard_client()
 
@@ -129,7 +136,7 @@ def update_bookmark(
             logger.warning(f"multiple bookmarks found for URL: {url.strip()}, using first one")
 
         bookmark = posts[0]
-        logger.debug(f"successfully retrieved bookmark: {bookmark.description}")
+        logger.debug(f"successfully retrieved bookmark {bookmark.description}")
 
         # track what we're updating for logging
         updates = []
@@ -150,7 +157,7 @@ def update_bookmark(
         if tags is not None:
             old_tags = bookmark.tags
             # parse tags and clean them
-            tag_list = [tag.strip() for tag in tags.split(',') if tag.strip()] if tags else []
+            tag_list = parse_tags(tags)
             bookmark.tags = ' '.join(tag_list)  # pinboard expects space-separated tags
             updates.append(f"tags: '{old_tags}' -> '{bookmark.tags}'")
 
@@ -228,9 +235,7 @@ def add_bookmark(
         extended_desc = description.strip() if description else ''
 
         # parse tags
-        tag_list = []
-        if tags:
-            tag_list = [tag.strip().lower() for tag in tags.split(',') if tag.strip()]
+        tag_list = parse_tags(tags)
 
         pinboard_client = get_pinboard_client()
 
@@ -269,7 +274,7 @@ def add_bookmark(
             'success': True
         }
 
-        logger.info(f"successfully created bookmark: {title}")
+        logger.info(f"successfully created bookmark {title}")
         return response
 
     except Exception as e:
@@ -294,16 +299,11 @@ def get_tags() -> Dict[str, Any]:
         rate_limit()
         tags_raw = pinboard_client.tags.get()
 
-        # format tags for response - tags_raw is a dict with tag names as keys and counts as values
-        formatted_tags = [
-            {'tag': tag_name, 'count': count}
-            for tag_name, count in tags_raw.items()
-        ]
-
-        # sort by count descending, then by tag name
-        formatted_tags.sort(key=lambda x: (-x['count'], x['tag']))
+        # format tags for response
+        formatted_tags = format_tags_response(tags_raw)
 
         # build response
+
         response = {
             'count': len(formatted_tags),
             'tags': formatted_tags,
@@ -316,3 +316,64 @@ def get_tags() -> Dict[str, Any]:
     except Exception as e:
         logger.error(f'error retrieving tags: {e}')
         return {'error': str(e), 'success': False}
+
+
+@mcp.tool
+def rename_tag(
+    old_tag: str,
+    new_tag: str
+) -> Dict[str, Any]:
+    '''
+    rename a tag across all bookmarks.
+
+    args:
+        old_tag: the existing tag name to rename (required)
+        new_tag: the new tag name (required)
+
+    returns:
+        dictionary containing rename operation result and metadata
+    '''
+    try:
+        # basic validation
+        if not old_tag or not old_tag.strip():
+            return {'error': 'old_tag is required and cannot be empty', 'success': False}
+        if not new_tag or not new_tag.strip():
+            return {'error': 'new_tag is required and cannot be empty', 'success': False}
+
+        # normalize tags
+        old_tag_normalized = normalize_tag(old_tag)
+        new_tag_normalized = normalize_tag(new_tag)
+
+        # check if tags are identical
+        if old_tag_normalized == new_tag_normalized:
+            return {'error': 'old_tag and new_tag cannot be the same', 'success': False}
+
+        pinboard_client = get_pinboard_client()
+
+        logger.info(f'renaming tag: \'{old_tag_normalized}\' -> \'{new_tag_normalized}\'')
+
+        # rename the tag
+        rate_limit()
+        result = pinboard_client.tags.rename(old=old_tag_normalized, new=new_tag_normalized)
+
+        if result is not True:
+            logger.error(f'unexpected response from Pinboard API: {result}')
+            return {'error': 'failed to rename tag - unexpected API response', 'success': False}
+
+        # build response
+
+        response = {
+            'old_tag': old_tag_normalized,
+            'new_tag': new_tag_normalized,
+            'message': f'successfully renamed tag \'{old_tag_normalized}\' to \'{new_tag_normalized}\'',
+            'success': True
+        }
+
+        logger.info(f'successfully renamed tag: \'{old_tag_normalized}\' -> \'{new_tag_normalized}\'')
+        return response
+
+    except Exception as e:
+        logger.error(f'error renaming tag: {e}')
+        return {'error': str(e), 'success': False}
+
+
