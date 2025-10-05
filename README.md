@@ -1,8 +1,8 @@
-I've been using pinboard for years to save bookmarks and wanted an easy way to access them directly in Claude Desktop.
+I've been using pinboard for years to save bookmarks. I've recently been working on a project to explore business operations data from Claude Desktop with an MCP server. Inspired by this, I've been experimenting with ideas for personal productivity tools to build for myself.
 
-The MCP server is intentionally minimal. I expose only the most basic bookmark operations (get, add, update, tags) without any opinionated filtering or analysis features. This keeps the context usage low and lets claude do the interpretation work.
+This MCP server implements a minimal set of tools for interacting with the pinboard api. There are tools to get/add/update bookmarks and list/rename tags.
 
-Once set up, you can ask Claude things like:
+Once set up, you can make queries like:
 
 - "show me all my bookmarks from december 2023"
 - "what were the main topics i was bookmarking last month?"
@@ -110,6 +110,22 @@ retrieve all tags with usage counts
 
 **example usage in claude:**
 > "show me all my tags and how often i use them"
+
+### rename_tag
+
+rename a tag across all bookmarks
+
+**parameters:**
+- `old_tag` (required): existing tag name to rename
+- `new_tag` (required): new tag name
+
+**validation:**
+- both tags must be non-empty
+- tags are normalized to lowercase
+- old and new tags cannot be identical
+
+**example usage in claude:**
+> "rename the tag 'ppython' to 'python'"
 
 ## dev
 
