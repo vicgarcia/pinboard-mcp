@@ -12,7 +12,7 @@ dependencies = [
 ]
 
 [project.scripts]
-pinboard-mcp = "pinboard_mcp:main"
+pinboard-mcp = "pinboard_mcp.server:run"
 
 [build-system]
 requires = ["hatchling"]

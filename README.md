@@ -38,9 +38,7 @@ add this to your claude desktop mcp settings:
     "pinboard": {
       "command": "docker",
       "args": [
-        "run",
-        "-i",
-        "--rm",
+        "run", "-i", "--rm",
         "-e", "PINBOARD_TOKEN=your-username:your-api-token",
         "pinboard-mcp:local"
       ]

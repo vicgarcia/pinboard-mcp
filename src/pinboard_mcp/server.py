@@ -423,3 +423,41 @@ def suggest_tags(url: str) -> Dict[str, Any]:
     except Exception as e:
         logger.error(f'error getting tag suggestions for {url}: {e}')
         return {'error': str(e), 'success': False}
+
+
+def run():
+
+    import os
+
+    logging.basicConfig(
+        level=logging.DEBUG if os.getenv('LOG_LEVEL', 'info').lower() == 'debug' else logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[logging.StreamHandler()]
+    )
+
+    logger.info('starting Pinboard MCP server')
+
+    try:
+        if not os.getenv('PINBOARD_TOKEN'):
+            logger.error('PINBOARD_TOKEN environment variable is required')
+            raise SystemExit(1)
+
+        try:
+            pinboard_client = get_pinboard_client()
+
+            rate_limit()
+            pinboard_client.posts.update()
+            logger.info(f'successfully connected to Pinboard')
+
+        except Exception as e:
+            logger.error(f'failed to connect to Pinboard: {e}')
+            raise SystemExit(1)
+
+        mcp.run()
+
+    except KeyboardInterrupt:
+        logger.info('server shutdown requested')
+
+    except Exception as e:
+        logger.error(f'server error: {e}')
+        raise SystemExit(1)
