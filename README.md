@@ -1,6 +1,6 @@
 I've been using [Pinboard](https://pinboard.in]) for years to save bookmarks. I've recently been working on a project to explore business operations data from Claude Desktop with an MCP server. Inspired by this, I've been experimenting with ideas for personal productivity tools to build for myself.
 
-This MCP server implements a minimal set of tools for interacting with the [pinboard api](https://pinboard.in/api). There are tools to get/add/update bookmarks and list/rename tags.
+This MCP server implements a minimal set of tools for interacting with the [pinboard api](https://pinboard.in/api). There are tools to get/add/update bookmarks, list/rename tags, and get tag suggestions.
 
 Once set up, you can make queries like:
 
@@ -126,6 +126,22 @@ rename a tag across all bookmarks
 
 **example usage in claude:**
 > "rename the tag 'ppython' to 'python'"
+
+### suggest_tags
+
+get suggested tags for a url from pinboard
+
+**parameters:**
+- `url` (required): web address to get tag suggestions for
+
+**returns:**
+- popular tags: site-wide tags commonly used by others for this url
+- recommended tags: personalized suggestions based on your tagging history
+- counts for both popular and recommended tags
+
+**example usage in claude:**
+> "suggest tags for https://example.com/article"
+> "what tags should i use for bookmarking https://github.com/repo/project"
 
 ## dev
 

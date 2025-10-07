@@ -1,7 +1,7 @@
 # Claude Code Session Documentation
 
 ## Project Overview
-Pinboard MCP Server - A minimal Python MCP (Model Context Protocol) server for accessing Pinboard.in bookmarks directly in Claude Desktop. Intentionally focused on basic bookmark and tag operations (get, add, update, tags, rename) to keep context usage low and let Claude handle the interpretation work.
+Pinboard MCP Server - A minimal Python MCP (Model Context Protocol) server for accessing Pinboard.in bookmarks directly in Claude Desktop. Intentionally focused on basic bookmark and tag operations (get, add, update, tags, rename, suggest) to keep context usage low and let Claude handle the interpretation work.
 
 ## Project Structure
 ```
@@ -9,7 +9,7 @@ pinboard-mcp/
 ├── src/
 │   └── pinboard_mcp/
 │       ├── __init__.py          # Package initialization
-│       ├── server.py            # Main MCP server implementation with 5 core tools
+│       ├── server.py            # Main MCP server implementation with 6 core tools
 │       ├── pinboard.py          # Pinboard API client and utilities
 │       └── utils.py             # Validation and helper functions
 ├── pyproject.toml              # Python project configuration
@@ -154,6 +154,24 @@ Rename a tag across all bookmarks.
 - Tag matching is case-insensitive
 - Useful for fixing typos or consolidating similar tags
 
+### `suggest_tags`
+Get suggested tags for a URL from Pinboard.
+
+**Parameters:**
+- `url` (required): The web address to get tag suggestions for
+
+**Returns:**
+- Popular tags: Site-wide tags commonly used by others for this URL
+- Recommended tags: Personalized suggestions based on your tagging history
+- Counts for both popular and recommended tags
+- Success status
+
+**Usage Notes:**
+- Helps discover relevant tags when bookmarking new content
+- Popular tags show how the community categorizes the URL
+- Recommended tags are personalized based on your past bookmarks
+- Rate limited to respect Pinboard's 3-second API limit
+
 ## Claude Desktop Integration
 
 ### Local Build Setup
@@ -216,6 +234,7 @@ Replace `your-username:your-api-token` with your actual Pinboard token from [set
 - `parse_tags()`: Parses comma-separated tags into normalized list (lowercase, trimmed)
 - `format_tags_response()`: Formats tags dictionary into sorted list with counts
 - `normalize_tag()`: Normalizes single tag (strip whitespace, lowercase)
+- `format_suggest_response()`: Formats tag suggestions into popular and recommended lists
 
 **`src/pinboard_mcp/server.py`:**
 - `get_bookmarks()`: Retrieves bookmarks with filtering and date range validation
@@ -223,6 +242,7 @@ Replace `your-username:your-api-token` with your actual Pinboard token from [set
 - `update_bookmark()`: Updates bookmark properties by URL with change tracking
 - `get_tags()`: Retrieves all tags with usage counts, sorted by popularity
 - `rename_tag()`: Renames a tag across all bookmarks with validation
+- `suggest_tags()`: Gets tag suggestions (popular and recommended) for a URL
 
 **`src/pinboard_mcp/utils.py`:**
 - `validate_url()`: Comprehensive URL validation and normalization (available but unused after streamlining)
@@ -241,6 +261,7 @@ Replace `your-username:your-api-token` with your actual Pinboard token from [set
 8. **Testing**: Validated date logic, imports, and Docker build
 9. **Tag Operations**: Added get_tags and rename_tag functionality
 10. **Helper Functions Refactoring**: Extracted formatting logic to pinboard.py for clean separation of concerns
+11. **Tag Suggestions**: Implemented suggest_tags tool for intelligent tag recommendations
 
 ### Technical Achievements
 - ✅ Professional Python package structure
@@ -316,7 +337,7 @@ Set `LOG_LEVEL=DEBUG` for detailed logging including API calls and rate limiting
 - **Graceful failures**: Detailed error messages without exposing internals
 
 ### Code Organization
-- **Five core tools**: `get_bookmarks`, `add_bookmark`, `update_bookmark`, `get_tags`, `rename_tag`
+- **Six core tools**: `get_bookmarks`, `add_bookmark`, `update_bookmark`, `get_tags`, `rename_tag`, `suggest_tags`
 - **Focused functionality**: Essential bookmark and tag operations only
 - **Harmonized patterns**: Same structure and error handling across all functions
 

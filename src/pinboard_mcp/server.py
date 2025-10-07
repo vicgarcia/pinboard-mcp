@@ -6,7 +6,8 @@ from .pinboard import (
     format_bookmark_response,
     parse_tags,
     format_tags_response,
-    normalize_tag
+    normalize_tag,
+    format_suggest_response
 )
 from .utils import validate_date_range
 
@@ -377,3 +378,48 @@ def rename_tag(
         return {'error': str(e), 'success': False}
 
 
+@mcp.tool
+def suggest_tags(url: str) -> Dict[str, Any]:
+    '''
+    get suggested tags for a URL from pinboard.
+
+    args:
+        url: the web address to get tag suggestions for (required)
+
+    returns:
+        dictionary containing popular and recommended tag suggestions
+    '''
+    try:
+        # basic validation
+        if not url or not url.strip():
+            return {'error': 'url is required and cannot be empty', 'success': False}
+
+        url = url.strip()
+        pinboard_client = get_pinboard_client()
+
+        logger.info(f'fetching tag suggestions for URL: {url}')
+
+        # get tag suggestions from Pinboard
+        rate_limit()
+        suggestions = pinboard_client.posts.suggest(url=url)
+
+        # format suggestions
+        formatted = format_suggest_response(suggestions)
+
+        # build response
+
+        response = {
+            'url': url,
+            'popular': formatted['popular'],
+            'recommended': formatted['recommended'],
+            'popular_count': len(formatted['popular']),
+            'recommended_count': len(formatted['recommended']),
+            'success': True
+        }
+
+        logger.info(f'successfully retrieved {len(formatted["popular"])} popular and {len(formatted["recommended"])} recommended tags for {url}')
+        return response
+
+    except Exception as e:
+        logger.error(f'error getting tag suggestions for {url}: {e}')
+        return {'error': str(e), 'success': False}

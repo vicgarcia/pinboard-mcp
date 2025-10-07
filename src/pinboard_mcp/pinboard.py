@@ -73,3 +73,20 @@ def format_tags_response(tags_raw: Dict[str, int]) -> List[Dict[str, Any]]:
 def normalize_tag(tag: str) -> str:
     ''' normalize a single tag (strip whitespace and lowercase) '''
     return tag.strip().lower()
+
+
+def format_suggest_response(suggestions: List[Dict[str, Any]]) -> Dict[str, List[str]]:
+    ''' format tag suggestions into popular and recommended lists '''
+    popular = []
+    recommended = []
+
+    for suggestion in suggestions:
+        if suggestion.get('popular'):
+            popular.extend(suggestion['popular'])
+        if suggestion.get('recommended'):
+            recommended.extend(suggestion['recommended'])
+
+    return {
+        'popular': popular,
+        'recommended': recommended
+    }
