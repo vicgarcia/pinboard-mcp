@@ -158,8 +158,8 @@ pip install -e .
 ```
 src/
   pinboard_mcp/
-    __init__.py       # server startup and connection testing
-    server.py         # mcp tools implementation
+    __init__.py       # package marker
+    server.py         # mcp tools implementation + run() entry point
     pinboard.py       # pinboard api client and utilities
     utils.py          # validation helpers
 ```

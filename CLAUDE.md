@@ -8,11 +8,11 @@ Pinboard MCP Server - A minimal Python MCP (Model Context Protocol) server for a
 pinboard-mcp/
 ├── src/
 │   └── pinboard_mcp/
-│       ├── __init__.py          # Package initialization
-│       ├── server.py            # Main MCP server implementation with 6 core tools
+│       ├── __init__.py          # Package marker (minimal)
+│       ├── server.py            # Main MCP server implementation with 6 core tools + run()
 │       ├── pinboard.py          # Pinboard API client and utilities
 │       └── utils.py             # Validation and helper functions
-├── pyproject.toml              # Python project configuration
+├── pyproject.toml              # Python project configuration (entry point: server:run)
 ├── Dockerfile                  # Container configuration
 ├── .dockerignore              # Docker ignore patterns
 ├── .gitignore                 # Git ignore patterns
@@ -243,6 +243,7 @@ Replace `your-username:your-api-token` with your actual Pinboard token from [set
 - `get_tags()`: Retrieves all tags with usage counts, sorted by popularity
 - `rename_tag()`: Renames a tag across all bookmarks with validation
 - `suggest_tags()`: Gets tag suggestions (popular and recommended) for a URL
+- `run()`: Main entry point that initializes logging, validates connection, and starts MCP server
 
 **`src/pinboard_mcp/utils.py`:**
 - `validate_url()`: Comprehensive URL validation and normalization (available but unused after streamlining)
@@ -262,6 +263,7 @@ Replace `your-username:your-api-token` with your actual Pinboard token from [set
 9. **Tag Operations**: Added get_tags and rename_tag functionality
 10. **Helper Functions Refactoring**: Extracted formatting logic to pinboard.py for clean separation of concerns
 11. **Tag Suggestions**: Implemented suggest_tags tool for intelligent tag recommendations
+12. **Code Organization**: Moved run() function to server.py bottom, simplified __init__.py to minimal package marker
 
 ### Technical Achievements
 - ✅ Professional Python package structure
@@ -340,6 +342,7 @@ Set `LOG_LEVEL=DEBUG` for detailed logging including API calls and rate limiting
 - **Six core tools**: `get_bookmarks`, `add_bookmark`, `update_bookmark`, `get_tags`, `rename_tag`, `suggest_tags`
 - **Focused functionality**: Essential bookmark and tag operations only
 - **Harmonized patterns**: Same structure and error handling across all functions
+- **Entry point**: `run()` function in server.py handles initialization, validation, and startup (called via `pinboard_mcp.server:run`)
 
 ---
 
