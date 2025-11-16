@@ -1,24 +1,19 @@
 # Claude Code Session Documentation
 
 ## Project Overview
-Pinboard MCP Server - A minimal Python MCP (Model Context Protocol) server for accessing Pinboard.in bookmarks directly in Claude Desktop. Intentionally focused on basic bookmark and tag operations (get, add, update, tags, rename, suggest) to keep context usage low and let Claude handle the interpretation work.
+Pinboard MCP Server - A minimal Python MCP server for accessing Pinboard.in bookmarks in Claude Desktop. Built with FastMCP, implements 6 core tools: get/add/update bookmarks, list/rename tags, and suggest tags. Intentionally minimal to keep context usage low and let Claude handle interpretation.
 
 ## Project Structure
 ```
 pinboard-mcp/
-├── src/
-│   └── pinboard_mcp/
-│       ├── __init__.py          # Package marker (minimal)
-│       ├── server.py            # Main MCP server implementation with 6 core tools + run()
-│       ├── pinboard.py          # Pinboard API client and utilities
-│       └── utils.py             # Validation and helper functions
-├── pyproject.toml              # Python project configuration (entry point: server:run)
-├── Dockerfile                  # Container configuration
-├── .dockerignore              # Docker ignore patterns
-├── .gitignore                 # Git ignore patterns
-├── README.md                  # Project documentation
-├── PRD.md                     # Product Requirements Document
-└── CLAUDE.md                  # This file
+├── src/pinboard_mcp/
+│   ├── __init__.py          # Package marker
+│   ├── server.py            # MCP tools + run() entry point
+│   ├── pinboard.py          # API client and formatting helpers
+│   └── utils.py             # Validation functions
+├── pyproject.toml           # Entry point: pinboard_mcp.server:run
+├── Dockerfile               # Container configuration
+└── README.md                # User-facing documentation
 ```
 
 ## External Documentation
@@ -28,180 +23,29 @@ pinboard-mcp/
 - **Pinboard API**: https://pinboard.in/api/ - Official Pinboard API documentation
 - **pinboard.py Library**: https://github.com/lionheart/pinboard.py - Python client library we use
 
-## Key Commands
+## Quick Reference
 
-### Development
+### Development Commands
 ```bash
-# Install in development mode
-pip install -e .
-
-# Run the server locally (requires PINBOARD_TOKEN env var)
-pinboard-mcp
-
-# Test basic functionality
-python -c "from pinboard_mcp.server import validate_date_range; print('✓ Import successful')"
+pip install -e .                    # Install in dev mode
+pinboard-mcp                        # Run server (requires PINBOARD_TOKEN)
+docker build -t pinboard-mcp:local . # Build Docker image
 ```
 
-### Docker
-```bash
-# Build Docker image using build script
-./build.sh
+### Environment Variables
+- `PINBOARD_TOKEN`: Required. Format: `username:API_TOKEN`
+- `LOG_LEVEL`: Optional. DEBUG or INFO (default: INFO)
 
-# Or manually:
-docker build -t pinboard-mcp:local .
-```
+## Tools Overview
+Six core MCP tools (see README.md for full documentation):
+- `get_bookmarks` - Retrieve with date/tag filtering (90-day limit)
+- `add_bookmark` - Create new bookmarks
+- `update_bookmark` - Update by URL with change tracking
+- `get_tags` - List all tags with usage counts
+- `rename_tag` - Rename across all bookmarks
+- `suggest_tags` - Get popular/recommended tags for URL
 
-### Testing & Validation
-```bash
-# Test date validation
-python -c "
-from pinboard_mcp.server import validate_date_range
-start, end = validate_date_range('2024-01-01', '2024-01-15')
-print(f'✓ Valid date range: {start} to {end}')
-"
-```
-
-## Environment Variables
-- `PINBOARD_TOKEN`: Required. Format: `username:API_TOKEN` (get from https://pinboard.in/settings/password)
-- `LOG_LEVEL`: Optional. Default: INFO (DEBUG, INFO, WARNING, ERROR)
-
-## Available Tools
-
-### `get_bookmarks`
-Retrieve bookmarks from Pinboard within a specified date range.
-
-**Parameters:**
-- `start_date` (optional): Start date in YYYY-MM-DD format
-- `end_date` (optional): End date in YYYY-MM-DD format  
-- `tags` (optional): Comma-separated tags to filter by
-- `limit` (optional): Maximum bookmarks to return (default: 200, max: 500)
-
-**Constraints:**
-- Date range cannot exceed 90 days
-- Rate limited to respect Pinboard's 3-second API limit
-
-### `update_bookmark`
-Update a bookmark's properties by URL.
-
-**Parameters:**
-- `url` (required): The URL of the bookmark to update
-- `title` (optional): New bookmark title
-- `description` (optional): New bookmark description
-- `tags` (optional): Comma-separated tags to set
-- `private` (optional): Boolean - true for private, false for public
-- `toread` (optional): Boolean - mark as to-read (true/false)
-
-**Usage Notes:**
-- URL serves as the unique identifier for the bookmark
-- At least one optional parameter must be provided
-- Returns the updated bookmark data and list of changes applied
-- Rate limited to respect Pinboard's 3-second API limit
-
-### `add_bookmark`
-Create a new bookmark in Pinboard.
-
-**Parameters:**
-- `url` (required): The web address to bookmark
-- `title` (required): The bookmark title/name
-- `description` (optional): Extended description or notes
-- `tags` (optional): Comma-separated tags to set
-- `private` (optional): Boolean - true for private, false for public (default: false)
-- `toread` (optional): Boolean - mark as to-read (default: false)
-
-**Validation Features:**
-- Streamlined validation trusting Pinboard API for complex checks
-- Basic required field validation (URL and title)
-- Tag parsing and normalization to lowercase
-- Rate limited to respect Pinboard's 3-second API limit
-
-**Returns:** Created bookmark data with success confirmation
-
-### `get_tags`
-Retrieve all tags from Pinboard with usage counts.
-
-**Parameters:** None
-
-**Returns:**
-- List of all tags sorted by usage count (descending), then alphabetically
-- Each tag includes name and count of bookmarks using it
-- Full response includes total tag count and success status
-
-**Usage Notes:**
-- Returns all tags with no filtering
-- Sorting prioritizes most-used tags first
-- Rate limited to respect Pinboard's 3-second API limit
-
-### `rename_tag`
-Rename a tag across all bookmarks.
-
-**Parameters:**
-- `old_tag` (required): The existing tag name to rename
-- `new_tag` (required): The new tag name
-
-**Validation Features:**
-- Both tags must be non-empty strings
-- Tags are automatically normalized to lowercase
-- Prevents renaming a tag to itself (duplicate check)
-- Rate limited to respect Pinboard's 3-second API limit
-
-**Returns:**
-- Confirmation of old and new tag names
-- Success status and descriptive message
-- Detailed error messages for validation failures
-
-**Usage Notes:**
-- Renames the tag across ALL bookmarks that use it
-- Tag matching is case-insensitive
-- Useful for fixing typos or consolidating similar tags
-
-### `suggest_tags`
-Get suggested tags for a URL from Pinboard.
-
-**Parameters:**
-- `url` (required): The web address to get tag suggestions for
-
-**Returns:**
-- Popular tags: Site-wide tags commonly used by others for this URL
-- Recommended tags: Personalized suggestions based on your tagging history
-- Counts for both popular and recommended tags
-- Success status
-
-**Usage Notes:**
-- Helps discover relevant tags when bookmarking new content
-- Popular tags show how the community categorizes the URL
-- Recommended tags are personalized based on your past bookmarks
-- Rate limited to respect Pinboard's 3-second API limit
-
-## Claude Desktop Integration
-
-### Local Build Setup
-
-First, clone and build the Docker image:
-```bash
-git clone https://github.com/vicgarcia/pinboard-mcp
-cd pinboard-mcp
-docker build -t pinboard-mcp:local .
-```
-
-Then add to Claude Desktop MCP settings:
-```json
-{
-  "mcpServers": {
-    "pinboard": {
-      "command": "docker",
-      "args": [
-        "run", 
-        "-i",
-        "--rm",
-        "-e", "PINBOARD_TOKEN=your-username:your-api-token",
-        "pinboard-mcp:local"
-      ]
-    }
-  }
-}
-```
-
-Replace `your-username:your-api-token` with your actual Pinboard token from [settings](https://pinboard.in/settings/password).
+All tools respect Pinboard's 3-second rate limit.
 
 ## Implementation Notes
 
@@ -225,127 +69,61 @@ Replace `your-username:your-api-token` with your actual Pinboard token from [set
 - **Helper functions in pinboard.py**: All formatting/normalization logic centralized for reusability
 - **Clean separation of concerns**: MCP orchestration in server.py, Pinboard-specific logic in pinboard.py
 
-### Key Functions
+### Module Organization
 
-**`src/pinboard_mcp/pinboard.py`:**
-- `get_pinboard_client()`: Creates authenticated Pinboard client
-- `rate_limit()`: Enforces 3-second API delays
-- `format_bookmark_response()`: Formats bookmark objects for MCP responses
-- `parse_tags()`: Parses comma-separated tags into normalized list (lowercase, trimmed)
-- `format_tags_response()`: Formats tags dictionary into sorted list with counts
-- `normalize_tag()`: Normalizes single tag (strip whitespace, lowercase)
-- `format_suggest_response()`: Formats tag suggestions into popular and recommended lists
+**`server.py`** - MCP tool definitions and orchestration
+- 6 tool functions decorated with `@mcp.tool()`
+- `run()` entry point: logging setup, auth validation, server start
 
-**`src/pinboard_mcp/server.py`:**
-- `get_bookmarks()`: Retrieves bookmarks with filtering and date range validation
-- `add_bookmark()`: Creates new bookmarks with streamlined validation
-- `update_bookmark()`: Updates bookmark properties by URL with change tracking
-- `get_tags()`: Retrieves all tags with usage counts, sorted by popularity
-- `rename_tag()`: Renames a tag across all bookmarks with validation
-- `suggest_tags()`: Gets tag suggestions (popular and recommended) for a URL
-- `run()`: Main entry point that initializes logging, validates connection, and starts MCP server
+**`pinboard.py`** - API client and formatting helpers
+- `get_pinboard_client()` - Auth client creation
+- `rate_limit()` - 3-second delay enforcement
+- Helper formatters: `format_bookmark_response()`, `format_tags_response()`, `format_suggest_response()`
+- Tag utilities: `parse_tags()`, `normalize_tag()`
 
-**`src/pinboard_mcp/utils.py`:**
-- `validate_url()`: Comprehensive URL validation and normalization (available but unused after streamlining)
-- `validate_date_range()`: Validates dates and enforces 90-day limit
+**`utils.py`** - Validation functions
+- `validate_date_range()` - Date parsing and 90-day limit
+- `validate_url()` - Unused after streamlining validation
 
-## Session History
+## Design Decisions
 
-### Milestone 1 Completed ✅
-1. **Knowledge Review**: Studied FastMCP and Pinboard API documentation
-2. **Architecture Design**: Created PRD with technical requirements
-3. **Initial Implementation**: Built working server with comprehensive bookmark tools
-4. **Docker Configuration**: Containerized with security best practices
-5. **Code Refactoring**: Moved to professional src/ folder structure
-6. **Entrypoint Setup**: Added CLI command via pyproject.toml
-7. **Portfolio Optimization**: Harmonized code patterns, consistent naming, streamlined validation
-8. **Testing**: Validated date logic, imports, and Docker build
-9. **Tag Operations**: Added get_tags and rename_tag functionality
-10. **Helper Functions Refactoring**: Extracted formatting logic to pinboard.py for clean separation of concerns
-11. **Tag Suggestions**: Implemented suggest_tags tool for intelligent tag recommendations
-12. **Code Organization**: Moved run() function to server.py bottom, simplified __init__.py to minimal package marker
+### What We Built
+- **Minimal tool set**: 6 core operations only (no deletion by design)
+- **90-day limit**: Prevent excessive API usage
+- **Rate limiting**: 3-second delays (Pinboard requirement)
+- **Streamlined validation**: Trust API, validate essentials only
+- **Helper functions**: Formatting logic in pinboard.py, not server.py
+- **STDIO transport**: Claude Desktop compatibility
 
-### Technical Achievements
-- ✅ Professional Python package structure
-- ✅ CLI entrypoint: `pinboard-mcp` command
-- ✅ Comprehensive input validation
-- ✅ Rate limiting compliance
-- ✅ Docker containerization
-- ✅ Environment-based configuration
-- ✅ Error handling for all failure modes
-- ✅ Logging with configurable levels
-- ✅ Bookmark update functionality with URL-based identification
-- ✅ Multi-property updates (title, description, tags, privacy, to-read)
-- ✅ Detailed change tracking and response formatting
-- ✅ Bookmark creation with streamlined validation
-- ✅ Portfolio-ready code with consistent patterns and naming
-- ✅ Harmonized error handling and response formatting
-- ✅ Clean, readable codebase optimized for professional presentation
-- ✅ Tag retrieval functionality with usage statistics and smart sorting
-- ✅ Tag rename functionality with normalization and validation
-- ✅ **DRY refactoring**: Extracted helper functions (parse_tags, format_tags_response, normalize_tag)
-- ✅ **Separation of concerns**: MCP tools focus on orchestration, helpers handle formatting
-- ✅ **Reusable components**: Helper functions used across multiple tools for consistency
+### What We Didn't Build
+- No caching (future optimization)
+- No batch operations (simplicity)
+- No deletion tools (safety)
+- No complex search (let Claude interpret)
+- No bookmark notes/content (use description field)
 
-## Future Development
+## Code Conventions
 
-### Planned Milestones
-- **Milestone 2**: Enhanced search and filtering capabilities
-- **Milestone 3**: Resource providers (tags, statistics)
-- **Milestone 4**: Performance optimizations and caching
+### Naming & Style
+- Descriptive variable names (`pinboard_client` not `pb`)
+- Lowercase log messages except proper names (Pinboard, API, URL)
+- Consistent error responses: `{"error": "message", "success": False}`
 
-### Potential Improvements
-- Response caching to reduce API calls
-- Batch bookmark operations
-- Tag suggestion functionality
-- Bookmark search across title/description
-- Connection pooling for better performance
+### Module Patterns
+- **server.py**: MCP tool orchestration, minimal logic
+- **pinboard.py**: API client, formatting, normalization
+- **utils.py**: Standalone validation functions
+- **DRY principle**: Extract formatters as helpers, reuse across tools
 
-## Known Limitations
-- No bookmark deletion (by design - prevents accidental data loss)
-- 90-day date range limit for retrieval (configurable if needed)
-- Single concurrent API call (due to rate limiting)
-- URL-based identification required for updates
-- Requires valid Pinboard account and API token
-
-## Troubleshooting
-
-### Common Issues
-1. **"PINBOARD_TOKEN required"**: Set environment variable with format `username:token`
-2. **"Authentication failed"**: Verify token from Pinboard settings page
-3. **"Rate limit exceeded"**: Server automatically handles this, wait briefly
-4. **Docker build fails**: Ensure src/ directory structure is correct
-
-### Debug Mode
-Set `LOG_LEVEL=DEBUG` for detailed logging including API calls and rate limiting.
+### Entry Point Flow
+```python
+run()  # server.py
+  → logging.basicConfig(...)
+  → get_pinboard_client()  # Validate auth
+  → mcp.run()  # Start FastMCP server
+```
 
 ---
 
-## Code Conventions Established
-
-### Naming Conventions
-- **Variable naming**: Descriptive names (`pinboard_client` not `pb` or `client`)
-- **Function organization**: Consistent patterns across all MCP tools
-- **Response formatting**: Unified structure for all API responses
-
-### Logging Standards
-- **Message format**: All log messages start lowercase except proper names (Pinboard, API, URL, MCP)
-- **Log levels**: DEBUG for detailed API calls, INFO for operations, ERROR for failures
-- **Consistency**: Same logging pattern across all modules
-
-### Error Handling Philosophy
-- **Streamlined validation**: Trust Pinboard API for complex validation, validate only essentials
-- **Consistent responses**: All errors return `{"error": "message", "success": False}`
-- **Graceful failures**: Detailed error messages without exposing internals
-
-### Code Organization
-- **Six core tools**: `get_bookmarks`, `add_bookmark`, `update_bookmark`, `get_tags`, `rename_tag`, `suggest_tags`
-- **Focused functionality**: Essential bookmark and tag operations only
-- **Harmonized patterns**: Same structure and error handling across all functions
-- **Entry point**: `run()` function in server.py handles initialization, validation, and startup (called via `pinboard_mcp.server:run`)
-
----
-
-**Project Status**: ✅ Milestone 1 Complete - Portfolio Ready  
-**Last Updated**: Production-ready with streamlined README and local Docker build workflow  
-**Next Session**: Ready for deployment and real-world usage analysis
+**Status**: ✅ Production Ready - Deployed to ghcr.io
+**Last Updated**: 2025-01-15 - README aligned with public registry workflow
