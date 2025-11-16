@@ -1,4 +1,4 @@
-# Python-generated files
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
@@ -19,27 +19,21 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-.python-version
 
 # Virtual environments
-.venv/
 venv/
 env/
 ENV/
+.venv/
 
-# Environment variables (never commit tokens!)
-.env
-.env.local
-.env.*.local
-
-# IDE files
+# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
 
-# OS files
+# OS
 .DS_Store
 .DS_Store?
 ._*
@@ -48,16 +42,22 @@ ENV/
 ehthumbs.db
 Thumbs.db
 
-# Logs
-*.log
-logs/
+# Git
+.git/
+.gitignore
+
+# Github
+.github
+
+# Documentation
+README.md
+PRD.md
+knowledge/
 
 # Testing
 .pytest_cache/
 .coverage
 htmlcov/
-.tox/
 
-# Temporary files
-*.tmp
-*.temp
+# Logs
+*.log
