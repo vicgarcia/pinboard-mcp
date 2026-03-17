@@ -1,4 +1,4 @@
-I've been using [Pinboard](https://pinboard.in]) for years to save bookmarks. I've recently been working on a project to explore business operations data from Claude Desktop with an MCP server. Inspired by this, I've been experimenting with ideas for personal productivity tools to build for myself.
+I've been using [Pinboard](https://pinboard.in) for years to save bookmarks. I've recently been working on a project to explore business operations data from Claude Desktop with an MCP server. Inspired by this, I've been experimenting with ideas for personal productivity tools to build for myself.
 
 This MCP server implements a minimal set of tools for interacting with the [pinboard api](https://pinboard.in/api). There are tools to get/add/update bookmarks, list/rename tags, and get tag suggestions.
 
@@ -11,21 +11,30 @@ Once set up, you can make queries like:
 
 ## setup
 
-this mcp server runs in a docker container for use with claude desktop.
-
-#### get the docker image
-
-```bash
-docker pull ghcr.io/vicgarcia/pinboard-mcp:latest
-```
-
 #### get your pinboard api token
 
 go to [pinboard settings](https://pinboard.in/settings/password) and copy your api token (format: `username:1234567890ABCDEF1234567890ABCDEF`)
 
-#### configure claude desktop
+#### option 1: install with uv
 
-add this to your claude desktop mcp settings:
+```bash
+uv tool install git+https://github.com/vicgarcia/pinboard-mcp
+```
+
+claude desktop config:
+
+```json
+{
+  "mcpServers": {
+    "pinboard": {
+      "command": "pinboard-mcp",
+      "args": ["--token", "username:token"]
+    }
+  }
+}
+```
+
+#### option 2: docker
 
 ```json
 {
@@ -34,7 +43,7 @@ add this to your claude desktop mcp settings:
       "command": "docker",
       "args": [
         "run", "-i", "--rm",
-        "-e", "PINBOARD_TOKEN=your-username:your-api-token",
+        "-e", "PINBOARD_TOKEN=username:token",
         "ghcr.io/vicgarcia/pinboard-mcp:latest"
       ]
     }
@@ -42,7 +51,7 @@ add this to your claude desktop mcp settings:
 }
 ```
 
-replace `your-username:your-api-token` with your actual pinboard token
+replace `username:token` with your actual pinboard token
 
 ## features
 
@@ -140,25 +149,25 @@ get suggested tags for a url from pinboard
 
 ## development
 
-if you want to work on this locally:
-
 ```bash
 git clone https://github.com/vicgarcia/pinboard-mcp
 cd pinboard-mcp
 
-# install dependencies
-pip install -e .
+# install in editable mode
+uv tool install --editable .
+
+# run
+PINBOARD_TOKEN=user:token pinboard-mcp
 ```
 
 #### project structure
 
 ```
-src/
-  pinboard_mcp/
-    __init__.py       # package marker
-    server.py         # mcp tools implementation + run() entry point
-    pinboard.py       # pinboard api client and utilities
-    utils.py          # validation helpers
+pinboard-mcp/
+├── pinboard_mcp.py   # single-file module (server + all logic)
+├── pyproject.toml    # package metadata and dependencies
+├── Dockerfile        # docker deployment
+└── README.md
 ```
 
 #### building docker image locally
@@ -167,19 +176,4 @@ src/
 docker build -t pinboard-mcp:local .
 ```
 
-to use the local build in claude desktop, update your mcp settings to use `pinboard-mcp:local` instead of `ghcr.io/vicgarcia/pinboard-mcp:latest`:
-
-```json
-{
-  "mcpServers": {
-    "pinboard": {
-      "command": "docker",
-      "args": [
-        "run", "-i", "--rm",
-        "-e", "PINBOARD_TOKEN=your-username:your-api-token",
-        "pinboard-mcp:local"
-      ]
-    }
-  }
-}
-```
+to use the local build in claude desktop, update your mcp settings to use `pinboard-mcp:local` instead of `ghcr.io/vicgarcia/pinboard-mcp:latest`.

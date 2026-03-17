@@ -1,19 +1,156 @@
-from typing import Optional, Dict, Any
-from fastmcp import FastMCP
-from .pinboard import (
-    get_pinboard_client,
-    rate_limit,
-    format_bookmark_response,
-    parse_tags,
-    format_tags_response,
-    normalize_tag,
-    format_suggest_response
-)
-from .utils import validate_date_range
-
+import argparse
 import logging
+import os
+import time
+from typing import Optional, Dict, Any, List
+from dateutil import parser as date_parser
+import pinboard
+from fastmcp import FastMCP
+
 logger = logging.getLogger(__name__)
 
+_HELP = '''
+environment variables:
+  PINBOARD_TOKEN   Pinboard API token (format: username:TOKEN)
+'''
+
+# module-level token set during run()
+_token: Optional[str] = None
+
+
+# arg parsing
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog='pinboard-mcp',
+        description='Pinboard MCP server',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=_HELP
+    )
+    parser.add_argument(
+        '--token',
+        default=os.getenv('PINBOARD_TOKEN'),
+        metavar='TOKEN',
+        help='Pinboard API token (or PINBOARD_TOKEN env var)'
+    )
+    return parser.parse_args()
+
+
+# validation utilities
+
+def validate_date_range(start_date: Optional[str], end_date: Optional[str]) -> tuple:
+    ''' validate and parse date range with 90-day maximum limit. '''
+    parsed_start = None
+    parsed_end = None
+
+    if start_date:
+        try:
+            parsed_start = date_parser.parse(start_date).date()
+        except (ValueError, TypeError):
+            raise ValueError(f"Invalid start_date format: {start_date}. Use YYYY-MM-DD format.")
+
+    if end_date:
+        try:
+            parsed_end = date_parser.parse(end_date).date()
+        except (ValueError, TypeError):
+            raise ValueError(f"Invalid end_date format: {end_date}. Use YYYY-MM-DD format.")
+
+    if parsed_start and parsed_end and parsed_start > parsed_end:
+        raise ValueError("start_date must be before end_date")
+
+    if parsed_start and parsed_end:
+        date_diff = (parsed_end - parsed_start).days
+        if date_diff > 90:
+            raise ValueError(f"Date range cannot exceed 90 days. Current range: {date_diff} days")
+
+    return parsed_start, parsed_end
+
+
+# pinboard api client + formatters
+
+RATE_LIMIT_SECONDS = 3.0
+last_api_call = 0.0
+
+
+def get_pinboard_client():
+    ''' get authenticated pinboard client '''
+    if not _token:
+        raise ValueError('pinboard token is required')
+    return pinboard.Pinboard(_token)
+
+
+def rate_limit():
+    ''' enforce rate limiting for pinboard api calls '''
+    global last_api_call
+    current_time = time.time()
+    time_since_last_call = current_time - last_api_call
+
+    if time_since_last_call < RATE_LIMIT_SECONDS:
+        sleep_time = RATE_LIMIT_SECONDS - time_since_last_call
+        logger.debug(f'rate limiting: sleeping for {sleep_time:.2f} seconds')
+        time.sleep(sleep_time)
+
+    last_api_call = time.time()
+
+
+def format_bookmark_response(bookmark) -> Dict[str, Any]:
+    ''' format a pinboard bookmark for response '''
+    time_str = None
+    try:
+        if bookmark.time:
+            time_str = bookmark.time.isoformat()
+    except Exception:
+        pass
+    return {
+        'url': bookmark.url,
+        'title': bookmark.description,
+        'description': bookmark.extended,
+        'tags': bookmark.tags,
+        'time': time_str,
+        'private': not bookmark.shared,
+    }
+
+
+def parse_tags(tags_str: Optional[str]) -> List[str]:
+    ''' parse comma-separated tags string into cleaned list '''
+    if not tags_str:
+        return []
+    return [tag.strip().lower() for tag in tags_str.split(',') if tag.strip()]
+
+
+def format_tags_response(tags_raw: Dict[str, int]) -> List[Dict[str, Any]]:
+    ''' format tags dictionary into sorted list with tag name and count '''
+    formatted_tags = [
+        {'tag': tag_name, 'count': count}
+        for tag_name, count in tags_raw.items()
+    ]
+    formatted_tags.sort(key=lambda x: (-x['count'], x['tag']))
+    return formatted_tags
+
+
+def normalize_tag(tag: str) -> str:
+    ''' normalize a single tag (strip whitespace and lowercase) '''
+    return tag.strip().lower()
+
+
+def format_suggest_response(suggestions: List[Dict[str, Any]]) -> Dict[str, List[str]]:
+    ''' format tag suggestions into popular and recommended lists '''
+    popular = []
+    recommended = []
+
+    for suggestion in suggestions:
+        if suggestion.get('popular'):
+            popular.extend(suggestion['popular'])
+        if suggestion.get('recommended'):
+            recommended.extend(suggestion['recommended'])
+
+    return {
+        'popular': popular,
+        'recommended': recommended
+    }
+
+
+# mcp server
 
 mcp = FastMCP('pinboard MCP')
 
@@ -32,7 +169,7 @@ def get_bookmarks(
         start_date: start date in yyyy-mm-dd format (optional)
         end_date: end date in yyyy-mm-dd format (optional)
         tags: comma-separated tags to filter by (optional)
-        limit: maximum bookmarks to return (default: 100, max: 500)
+        limit: maximum bookmarks to return (default: 200, max: 500)
 
     returns:
         dictionary containing bookmarks and metadata
@@ -43,12 +180,10 @@ def get_bookmarks(
 
         parsed_start, parsed_end = validate_date_range(start_date, end_date)
 
-        # parse tags
         tag_list = parse_tags(tags)
 
         pinboard_client = get_pinboard_client()
 
-        # build API parameters for posts.all()
         api_params = {
             'results': limit
         }
@@ -61,12 +196,9 @@ def get_bookmarks(
 
         logger.info(f'fetching bookmarks with params: {api_params}')
 
-        # fetch bookmarks from Pinboard
         rate_limit()
         bookmarks_raw = pinboard_client.posts.all(**api_params)
         formatted_bookmarks = [format_bookmark_response(bookmark) for bookmark in bookmarks_raw]
-
-        # build response
 
         filters_applied = {'limit': limit}
 
@@ -125,7 +257,6 @@ def update_bookmark(
 
         logger.debug(f"retrieving bookmark for URL: {url.strip()}")
 
-        # get existing bookmark
         rate_limit()
         result = pinboard_client.posts.get(url=url.strip())
         posts = result.get('posts', [])
@@ -139,52 +270,41 @@ def update_bookmark(
         bookmark = posts[0]
         logger.debug(f"successfully retrieved bookmark {bookmark.description}")
 
-        # track what we're updating for logging
         updates = []
 
-        # update title (maps to bookmark.description in Pinboard API)
         if title is not None:
             old_title = bookmark.description
             bookmark.description = title.strip()
             updates.append(f"title: '{old_title}' -> '{bookmark.description}'")
 
-        # update description (maps to bookmark.extended in Pinboard API)
         if description is not None:
             old_desc = bookmark.extended
             bookmark.extended = description.strip()
             updates.append(f"description: '{old_desc}' -> '{bookmark.extended}'")
 
-        # update tags
         if tags is not None:
             old_tags = bookmark.tags
-            # parse tags and clean them
             tag_list = parse_tags(tags)
-            bookmark.tags = ' '.join(tag_list)  # pinboard expects space-separated tags
+            bookmark.tags = ' '.join(tag_list)
             updates.append(f"tags: '{old_tags}' -> '{bookmark.tags}'")
 
-        # update privacy setting
         if private is not None:
             old_shared = bookmark.shared
-            bookmark.shared = not private  # pinboard uses 'shared', we use 'private'
+            bookmark.shared = not private
             updates.append(f"private: {old_shared} -> {not bookmark.shared}")
 
-        # update to-read status
         if toread is not None:
             old_toread = bookmark.toread
-            bookmark.toread = 'yes' if toread else 'no'  # pinboard expects 'yes'/'no'
+            bookmark.toread = 'yes' if toread else 'no'
             updates.append(f"toread: '{old_toread}' -> '{bookmark.toread}'")
 
-        # validate that at least one update was provided
         if not updates:
             return {'error': 'no updates provided. At least one field (title, description, tags, private, toread) must be specified.', 'success': False}
 
         logger.info(f"updating bookmark {url}: {', '.join(updates)}")
 
-        # save the bookmark
         rate_limit()
         bookmark.save()
-
-        # build response
 
         response = {
             'bookmark': format_bookmark_response(bookmark),
@@ -224,43 +344,36 @@ def add_bookmark(
         dictionary containing the created bookmark data and metadata
     '''
     try:
-        # basic validation
         if not url or not url.strip():
             return {'error': 'url is required', 'success': False}
         if not title or not title.strip():
             return {'error': 'title is required', 'success': False}
 
-        # prepare parameters
         url = url.strip()
         title = title.strip()
         extended_desc = description.strip() if description else ''
 
-        # parse tags
         tag_list = parse_tags(tags)
 
         pinboard_client = get_pinboard_client()
 
-        # build API parameters for posts.add()
         api_params = {
             'url': url,
-            'description': title,  # pinboard API uses 'description' for title
-            'extended': extended_desc,  # extended description
-            'tags': tag_list,  # pinboard.py accepts list format
-            'shared': not private,  # pinboard uses 'shared', we use 'private'
+            'description': title,
+            'extended': extended_desc,
+            'tags': tag_list,
+            'shared': not private,
             'toread': toread
         }
 
         logger.info(f"adding bookmark: {title} -> {url}")
 
-        # create the bookmark
         rate_limit()
         result = pinboard_client.posts.add(**api_params)
 
         if result is not True:
             logger.error(f"unexpected response from Pinboard API: {result}")
             return {'error': 'failed to create bookmark - unexpected API response', 'success': False}
-
-        # build response
 
         response = {
             'bookmark': {
@@ -296,14 +409,10 @@ def get_tags() -> Dict[str, Any]:
 
         logger.info('fetching tags from Pinboard')
 
-        # fetch tags from Pinboard
         rate_limit()
         tags_raw = pinboard_client.tags.get()
 
-        # format tags for response
         formatted_tags = format_tags_response(tags_raw)
-
-        # build response
 
         response = {
             'count': len(formatted_tags),
@@ -335,17 +444,14 @@ def rename_tag(
         dictionary containing rename operation result and metadata
     '''
     try:
-        # basic validation
         if not old_tag or not old_tag.strip():
             return {'error': 'old_tag is required and cannot be empty', 'success': False}
         if not new_tag or not new_tag.strip():
             return {'error': 'new_tag is required and cannot be empty', 'success': False}
 
-        # normalize tags
         old_tag_normalized = normalize_tag(old_tag)
         new_tag_normalized = normalize_tag(new_tag)
 
-        # check if tags are identical
         if old_tag_normalized == new_tag_normalized:
             return {'error': 'old_tag and new_tag cannot be the same', 'success': False}
 
@@ -353,15 +459,12 @@ def rename_tag(
 
         logger.info(f'renaming tag: \'{old_tag_normalized}\' -> \'{new_tag_normalized}\'')
 
-        # rename the tag
         rate_limit()
         result = pinboard_client.tags.rename(old=old_tag_normalized, new=new_tag_normalized)
 
         if result is not True:
             logger.error(f'unexpected response from Pinboard API: {result}')
             return {'error': 'failed to rename tag - unexpected API response', 'success': False}
-
-        # build response
 
         response = {
             'old_tag': old_tag_normalized,
@@ -390,7 +493,6 @@ def suggest_tags(url: str) -> Dict[str, Any]:
         dictionary containing popular and recommended tag suggestions
     '''
     try:
-        # basic validation
         if not url or not url.strip():
             return {'error': 'url is required and cannot be empty', 'success': False}
 
@@ -399,14 +501,10 @@ def suggest_tags(url: str) -> Dict[str, Any]:
 
         logger.info(f'fetching tag suggestions for URL: {url}')
 
-        # get tag suggestions from Pinboard
         rate_limit()
         suggestions = pinboard_client.posts.suggest(url=url)
 
-        # format suggestions
         formatted = format_suggest_response(suggestions)
-
-        # build response
 
         response = {
             'url': url,
@@ -426,22 +524,24 @@ def suggest_tags(url: str) -> Dict[str, Any]:
 
 
 def run():
-
-    import os
-
     logging.basicConfig(
         level=logging.DEBUG if os.getenv('LOG_LEVEL', 'info').lower() == 'debug' else logging.INFO,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
         handlers=[logging.StreamHandler()]
     )
 
+    args = parse_args()
+
+    if not args.token:
+        logger.error('token is required (--token or PINBOARD_TOKEN env var)')
+        raise SystemExit(1)
+
+    global _token
+    _token = args.token
+
     logger.info('starting Pinboard MCP server')
 
     try:
-        if not os.getenv('PINBOARD_TOKEN'):
-            logger.error('PINBOARD_TOKEN environment variable is required')
-            raise SystemExit(1)
-
         try:
             pinboard_client = get_pinboard_client()
 
@@ -461,3 +561,7 @@ def run():
     except Exception as e:
         logger.error(f'server error: {e}')
         raise SystemExit(1)
+
+
+if __name__ == '__main__':
+    run()

@@ -3,17 +3,16 @@
 ## Project Overview
 Pinboard MCP Server - A minimal Python MCP server for accessing Pinboard.in bookmarks in Claude Desktop. Built with FastMCP, implements 6 core tools: get/add/update bookmarks, list/rename tags, and suggest tags. Intentionally minimal to keep context usage low and let Claude handle interpretation.
 
+Single-file module installable via `uv tool install`.
+
 ## Project Structure
 ```
 pinboard-mcp/
-├── src/pinboard_mcp/
-│   ├── __init__.py          # Package marker
-│   ├── server.py            # MCP tools + run() entry point
-│   ├── pinboard.py          # API client and formatting helpers
-│   └── utils.py             # Validation functions
-├── pyproject.toml           # Entry point: pinboard_mcp.server:run
-├── Dockerfile               # Container configuration
-└── README.md                # User-facing documentation
+├── pinboard_mcp.py   # single-file module (all logic + MCP server)
+├── pyproject.toml    # package metadata and dependencies
+├── Dockerfile        # docker deployment
+├── README.md         # user-facing documentation
+└── CLAUDE.md         # this file
 ```
 
 ## External Documentation
@@ -27,9 +26,14 @@ pinboard-mcp/
 
 ### Development Commands
 ```bash
-pip install -e .                    # Install in dev mode
-pinboard-mcp                        # Run server (requires PINBOARD_TOKEN)
-docker build -t pinboard-mcp:local . # Build Docker image
+uv tool install --editable .                    # install in dev mode
+PINBOARD_TOKEN=user:token pinboard-mcp          # run
+docker build -t pinboard-mcp:local .            # build docker image
+```
+
+### Installation
+```bash
+uv tool install git+https://github.com/vicgarcia/pinboard-mcp
 ```
 
 ### Environment Variables
@@ -50,6 +54,7 @@ All tools respect Pinboard's 3-second rate limit.
 ## Implementation Notes
 
 ### Architecture Decisions
+- **Single-file module**: All logic in `pinboard_mcp.py`, installed via pyproject.toml
 - **FastMCP**: Used for MCP server framework (simpler than raw MCP protocol)
 - **Pinboard.py**: Official Python library for Pinboard API access
 - **STDIO Transport**: Default for Claude Desktop compatibility
@@ -63,27 +68,22 @@ All tools respect Pinboard's 3-second rate limit.
 - Streamlined validation (trusting API where appropriate)
 - Structured logging with configurable levels (all lowercase except proper names)
 - Consistent variable naming (`pinboard_client` for clarity)
-- Harmonized code patterns across all functions
-- Non-root Docker execution
-- Environment-based configuration
-- **Helper functions in pinboard.py**: All formatting/normalization logic centralized for reusability
-- **Clean separation of concerns**: MCP orchestration in server.py, Pinboard-specific logic in pinboard.py
 
-### Module Organization
+### File Organization (within pinboard_mcp.py)
+- **Arg parsing** — `parse_args()`, `_HELP` constant
+- **Validation utilities** — `validate_url()`, `validate_date_range()`
+- **API client + formatters** — `get_pinboard_client()`, `rate_limit()`, format/parse helpers
+- **MCP server** — `mcp = FastMCP(...)`, 6 `@mcp.tool` definitions
+- **Entry point** — `run()`, `if __name__ == '__main__': run()`
 
-**`server.py`** - MCP tool definitions and orchestration
-- 6 tool functions decorated with `@mcp.tool()`
-- `run()` entry point: logging setup, auth validation, server start
-
-**`pinboard.py`** - API client and formatting helpers
-- `get_pinboard_client()` - Auth client creation
-- `rate_limit()` - 3-second delay enforcement
-- Helper formatters: `format_bookmark_response()`, `format_tags_response()`, `format_suggest_response()`
-- Tag utilities: `parse_tags()`, `normalize_tag()`
-
-**`utils.py`** - Validation functions
-- `validate_date_range()` - Date parsing and 90-day limit
-- `validate_url()` - Unused after streamlining validation
+### Entry Point Flow
+```python
+run()
+  → logging.basicConfig(...)
+  → parse_args()
+  → get_pinboard_client()  # Validate auth
+  → mcp.run()  # Start FastMCP server
+```
 
 ## Design Decisions
 
@@ -92,7 +92,6 @@ All tools respect Pinboard's 3-second rate limit.
 - **90-day limit**: Prevent excessive API usage
 - **Rate limiting**: 3-second delays (Pinboard requirement)
 - **Streamlined validation**: Trust API, validate essentials only
-- **Helper functions**: Formatting logic in pinboard.py, not server.py
 - **STDIO transport**: Claude Desktop compatibility
 
 ### What We Didn't Build
@@ -108,22 +107,3 @@ All tools respect Pinboard's 3-second rate limit.
 - Descriptive variable names (`pinboard_client` not `pb`)
 - Lowercase log messages except proper names (Pinboard, API, URL)
 - Consistent error responses: `{"error": "message", "success": False}`
-
-### Module Patterns
-- **server.py**: MCP tool orchestration, minimal logic
-- **pinboard.py**: API client, formatting, normalization
-- **utils.py**: Standalone validation functions
-- **DRY principle**: Extract formatters as helpers, reuse across tools
-
-### Entry Point Flow
-```python
-run()  # server.py
-  → logging.basicConfig(...)
-  → get_pinboard_client()  # Validate auth
-  → mcp.run()  # Start FastMCP server
-```
-
----
-
-**Status**: ✅ Production Ready - Deployed to ghcr.io
-**Last Updated**: 2025-01-15 - README aligned with public registry workflow
