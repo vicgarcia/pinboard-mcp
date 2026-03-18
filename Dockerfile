@@ -3,7 +3,7 @@ FROM python:3.12-slim
 WORKDIR /app
 
 COPY pyproject.toml .
-COPY pinboard_mcp.py .
+COPY src/ src/
 
 RUN pip install --no-cache-dir .
 
