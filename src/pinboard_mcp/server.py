@@ -1,24 +1,74 @@
-from typing import Optional, Dict, Any
-from fastmcp import FastMCP
-from .pinboard import (
-    get_pinboard_client,
-    rate_limit,
-    format_bookmark_response,
-    parse_tags,
-    format_tags_response,
-    normalize_tag,
-    format_suggest_response
-)
-from .utils import validate_date_range
+'''
+pinboard mcp server with fastmcp tools.
 
+provides mcp tools for interacting with pinboard bookmarks including
+retrieval, creation, updating, and tag management.
+'''
+
+import argparse
 import logging
+import os
+from typing import Any, Dict, List, Optional
+
+from fastmcp import FastMCP
+
+from pinboard_mcp.pinboard_client import PinboardClient, PinboardError
+from pinboard_mcp.schema import (
+    create_error_response,
+    create_success_response,
+    parse_tags,
+    validate_date_range,
+)
+
 logger = logging.getLogger(__name__)
 
+_HELP = '''
+environment variables:
+  PINBOARD_TOKEN   Pinboard API token (format: username:TOKEN)
+  LOG_LEVEL        Logging level (debug or info, default: info)
+'''
+
+# module-level client singleton
+_client: Optional[PinboardClient] = None
+
+
+def parse_args() -> argparse.Namespace:
+    '''parse command line arguments.'''
+    parser = argparse.ArgumentParser(
+        prog='pinboard-mcp',
+        description='Pinboard MCP server',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=_HELP
+    )
+    parser.add_argument(
+        '--token',
+        default=os.getenv('PINBOARD_TOKEN'),
+        metavar='TOKEN',
+        help='Pinboard API token (or PINBOARD_TOKEN env var)'
+    )
+    return parser.parse_args()
+
+
+def get_client() -> PinboardClient:
+    '''get the pinboard client singleton.'''
+    if _client is None:
+        raise RuntimeError('Pinboard client not initialized')
+    return _client
+
+
+def format_error(error: Exception) -> Dict[str, Any]:
+    '''format an exception as an error response.'''
+    return create_error_response(str(error))
+
+
+# mcp server
 
 mcp = FastMCP('pinboard MCP')
 
 
-@mcp.tool
+# bookmark tools
+
+@mcp.tool()
 def get_bookmarks(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
@@ -32,69 +82,112 @@ def get_bookmarks(
         start_date: start date in yyyy-mm-dd format (optional)
         end_date: end date in yyyy-mm-dd format (optional)
         tags: comma-separated tags to filter by (optional)
-        limit: maximum bookmarks to return (default: 100, max: 500)
+        limit: maximum bookmarks to return (default: 200, max: 500)
 
     returns:
         dictionary containing bookmarks and metadata
     '''
     try:
         if limit <= 0 or limit > 500:
-            return {'error': 'limit must be between 1 and 500', 'success': False}
+            return create_error_response('limit must be between 1 and 500')
 
         parsed_start, parsed_end = validate_date_range(start_date, end_date)
-
-        # parse tags
         tag_list = parse_tags(tags)
 
-        pinboard_client = get_pinboard_client()
+        with get_client() as client:
+            bookmarks = client.get_bookmarks(
+                start_date=parsed_start,
+                end_date=parsed_end,
+                tags=tag_list,
+                limit=limit
+            )
 
-        # build API parameters for posts.all()
-        api_params = {
-            'results': limit
-        }
-        if tag_list:
-            api_params['tag'] = tag_list
-        if parsed_start:
-            api_params['fromdt'] = parsed_start
-        if parsed_end:
-            api_params['todt'] = parsed_end
+        formatted_bookmarks = [b.to_dict() for b in bookmarks]
 
-        logger.info(f'fetching bookmarks with params: {api_params}')
-
-        # fetch bookmarks from Pinboard
-        rate_limit()
-        bookmarks_raw = pinboard_client.posts.all(**api_params)
-        formatted_bookmarks = [format_bookmark_response(bookmark) for bookmark in bookmarks_raw]
-
-        # build response
-
-        filters_applied = {'limit': limit}
-
+        filters_applied: Dict[str, Any] = {'limit': limit}
         if parsed_start or parsed_end:
             filters_applied['date_range'] = {
                 'start': parsed_start.isoformat() if parsed_start else None,
                 'end': parsed_end.isoformat() if parsed_end else None
             }
-
         if tag_list:
             filters_applied['tags'] = ','.join(tag_list)
 
-        response = {
-            'count': len(formatted_bookmarks),
-            'bookmarks': formatted_bookmarks,
-            'filters_applied': filters_applied,
-            'success': True
-        }
+        return create_success_response(
+            count=len(formatted_bookmarks),
+            bookmarks=formatted_bookmarks,
+            filters_applied=filters_applied
+        )
 
-        logger.info(f"successfully retrieved {len(formatted_bookmarks)} bookmarks")
-        return response
-
+    except ValueError as e:
+        logger.error(f'validation error: {e}')
+        return create_error_response(str(e))
+    except PinboardError as e:
+        logger.error(f'pinboard error retrieving bookmarks: {e}')
+        return format_error(e)
     except Exception as e:
-        logger.error(f"error retrieving bookmarks: {e}")
-        return {'error': str(e), 'success': False}
+        logger.exception(f'unexpected error retrieving bookmarks: {e}')
+        return create_error_response(f'Unexpected error: {e}')
 
 
-@mcp.tool
+@mcp.tool()
+def add_bookmark(
+    url: str,
+    title: str,
+    description: Optional[str] = None,
+    tags: Optional[str] = None,
+    private: bool = False,
+    toread: bool = False
+) -> Dict[str, Any]:
+    '''
+    create a new bookmark in pinboard.
+
+    args:
+        url: the web address to bookmark (required)
+        title: the bookmark title/name (required)
+        description: extended description or notes (optional)
+        tags: comma-separated tags (optional)
+        private: set bookmark privacy - true for private, false for public (default: false)
+        toread: mark as to-read - true/false (default: false)
+
+    returns:
+        dictionary containing the created bookmark data and metadata
+    '''
+    try:
+        if not url or not url.strip():
+            return create_error_response('url is required')
+        if not title or not title.strip():
+            return create_error_response('title is required')
+
+        url = url.strip()
+        title = title.strip()
+        desc = description.strip() if description else ''
+        tag_list = parse_tags(tags)
+
+        with get_client() as client:
+            bookmark = client.add_bookmark(
+                url=url,
+                title=title,
+                description=desc,
+                tags=tag_list,
+                private=private,
+                toread=toread
+            )
+
+        return create_success_response(
+            bookmark=bookmark.to_dict(),
+            message='bookmark created successfully'
+        )
+
+    except PinboardError as e:
+        logger.error(f'pinboard error creating bookmark: {e}')
+        return format_error(e)
+    except Exception as e:
+        logger.exception(f'unexpected error creating bookmark: {e}')
+        return create_error_response(f'Unexpected error: {e}')
+
+
+@mcp.tool()
 def update_bookmark(
     url: str,
     title: Optional[str] = None,
@@ -119,171 +212,39 @@ def update_bookmark(
     '''
     try:
         if not url or not url.strip():
-            return {'error': 'url is required and cannot be empty', 'success': False}
+            return create_error_response('url is required and cannot be empty')
 
-        pinboard_client = get_pinboard_client()
-
-        logger.debug(f"retrieving bookmark for URL: {url.strip()}")
-
-        # get existing bookmark
-        rate_limit()
-        result = pinboard_client.posts.get(url=url.strip())
-        posts = result.get('posts', [])
-
-        if not posts:
-            return {'error': f"no bookmark found for URL: {url.strip()}", 'success': False}
-
-        if len(posts) > 1:
-            logger.warning(f"multiple bookmarks found for URL: {url.strip()}, using first one")
-
-        bookmark = posts[0]
-        logger.debug(f"successfully retrieved bookmark {bookmark.description}")
-
-        # track what we're updating for logging
-        updates = []
-
-        # update title (maps to bookmark.description in Pinboard API)
-        if title is not None:
-            old_title = bookmark.description
-            bookmark.description = title.strip()
-            updates.append(f"title: '{old_title}' -> '{bookmark.description}'")
-
-        # update description (maps to bookmark.extended in Pinboard API)
-        if description is not None:
-            old_desc = bookmark.extended
-            bookmark.extended = description.strip()
-            updates.append(f"description: '{old_desc}' -> '{bookmark.extended}'")
-
-        # update tags
-        if tags is not None:
-            old_tags = bookmark.tags
-            # parse tags and clean them
-            tag_list = parse_tags(tags)
-            bookmark.tags = ' '.join(tag_list)  # pinboard expects space-separated tags
-            updates.append(f"tags: '{old_tags}' -> '{bookmark.tags}'")
-
-        # update privacy setting
-        if private is not None:
-            old_shared = bookmark.shared
-            bookmark.shared = not private  # pinboard uses 'shared', we use 'private'
-            updates.append(f"private: {old_shared} -> {not bookmark.shared}")
-
-        # update to-read status
-        if toread is not None:
-            old_toread = bookmark.toread
-            bookmark.toread = 'yes' if toread else 'no'  # pinboard expects 'yes'/'no'
-            updates.append(f"toread: '{old_toread}' -> '{bookmark.toread}'")
-
-        # validate that at least one update was provided
-        if not updates:
-            return {'error': 'no updates provided. At least one field (title, description, tags, private, toread) must be specified.', 'success': False}
-
-        logger.info(f"updating bookmark {url}: {', '.join(updates)}")
-
-        # save the bookmark
-        rate_limit()
-        bookmark.save()
-
-        # build response
-
-        response = {
-            'bookmark': format_bookmark_response(bookmark),
-            'updates_applied': updates,
-            'success': True
-        }
-
-        logger.info(f'successfully updated bookmark: {url}')
-        return response
-
-    except Exception as e:
-        logger.error(f'error updating bookmark {url}: {e}')
-        return {'error': str(e), 'success': False}
-
-
-@mcp.tool
-def add_bookmark(
-    url: str,
-    title: str,
-    description: Optional[str] = None,
-    tags: Optional[str] = None,
-    private: bool = False,
-    toread: bool = False
-) -> Dict[str, Any]:
-    '''
-    create a new bookmark in pinboard.
-
-    args:
-        url: the web address to bookmark (required)
-        title: the bookmark title/name (required)
-        description: extended description or notes (optional)
-        tags: comma-separated tags (optional)
-        private: set bookmark privacy - true for private, false for public (default: false)
-        toread: mark as to-read - true/false (default: false)
-
-    returns:
-        dictionary containing the created bookmark data and metadata
-    '''
-    try:
-        # basic validation
-        if not url or not url.strip():
-            return {'error': 'url is required', 'success': False}
-        if not title or not title.strip():
-            return {'error': 'title is required', 'success': False}
-
-        # prepare parameters
         url = url.strip()
-        title = title.strip()
-        extended_desc = description.strip() if description else ''
+        tag_list = parse_tags(tags) if tags is not None else None
+        title_clean = title.strip() if title is not None else None
+        desc_clean = description.strip() if description is not None else None
 
-        # parse tags
-        tag_list = parse_tags(tags)
+        with get_client() as client:
+            bookmark, updates = client.update_bookmark(
+                url=url,
+                title=title_clean,
+                description=desc_clean,
+                tags=tag_list,
+                private=private,
+                toread=toread
+            )
 
-        pinboard_client = get_pinboard_client()
+        return create_success_response(
+            bookmark=bookmark.to_dict(),
+            updates_applied=updates
+        )
 
-        # build API parameters for posts.add()
-        api_params = {
-            'url': url,
-            'description': title,  # pinboard API uses 'description' for title
-            'extended': extended_desc,  # extended description
-            'tags': tag_list,  # pinboard.py accepts list format
-            'shared': not private,  # pinboard uses 'shared', we use 'private'
-            'toread': toread
-        }
-
-        logger.info(f"adding bookmark: {title} -> {url}")
-
-        # create the bookmark
-        rate_limit()
-        result = pinboard_client.posts.add(**api_params)
-
-        if result is not True:
-            logger.error(f"unexpected response from Pinboard API: {result}")
-            return {'error': 'failed to create bookmark - unexpected API response', 'success': False}
-
-        # build response
-
-        response = {
-            'bookmark': {
-                'url': url,
-                'title': title,
-                'description': extended_desc,
-                'tags': ' '.join(tag_list) if tag_list else '',
-                'time': None,
-                'private': private
-            },
-            'message': 'bookmark created successfully',
-            'success': True
-        }
-
-        logger.info(f"successfully created bookmark {title}")
-        return response
-
+    except PinboardError as e:
+        logger.error(f'pinboard error updating bookmark: {e}')
+        return format_error(e)
     except Exception as e:
-        logger.error(f"error creating bookmark: {e}")
-        return {'error': str(e), 'success': False}
+        logger.exception(f'unexpected error updating bookmark: {e}')
+        return create_error_response(f'Unexpected error: {e}')
 
 
-@mcp.tool
+# tag tools
+
+@mcp.tool()
 def get_tags() -> Dict[str, Any]:
     '''
     retrieve all tags from pinboard with usage counts.
@@ -292,38 +253,26 @@ def get_tags() -> Dict[str, Any]:
         dictionary containing tags and metadata
     '''
     try:
-        pinboard_client = get_pinboard_client()
+        with get_client() as client:
+            tags = client.get_tags()
 
-        logger.info('fetching tags from Pinboard')
+        formatted_tags = [t.to_dict() for t in tags]
 
-        # fetch tags from Pinboard
-        rate_limit()
-        tags_raw = pinboard_client.tags.get()
+        return create_success_response(
+            count=len(formatted_tags),
+            tags=formatted_tags
+        )
 
-        # format tags for response
-        formatted_tags = format_tags_response(tags_raw)
-
-        # build response
-
-        response = {
-            'count': len(formatted_tags),
-            'tags': formatted_tags,
-            'success': True
-        }
-
-        logger.info(f'successfully retrieved {len(formatted_tags)} tags')
-        return response
-
+    except PinboardError as e:
+        logger.error(f'pinboard error retrieving tags: {e}')
+        return format_error(e)
     except Exception as e:
-        logger.error(f'error retrieving tags: {e}')
-        return {'error': str(e), 'success': False}
+        logger.exception(f'unexpected error retrieving tags: {e}')
+        return create_error_response(f'Unexpected error: {e}')
 
 
-@mcp.tool
-def rename_tag(
-    old_tag: str,
-    new_tag: str
-) -> Dict[str, Any]:
+@mcp.tool()
+def rename_tag(old_tag: str, new_tag: str) -> Dict[str, Any]:
     '''
     rename a tag across all bookmarks.
 
@@ -335,50 +284,32 @@ def rename_tag(
         dictionary containing rename operation result and metadata
     '''
     try:
-        # basic validation
         if not old_tag or not old_tag.strip():
-            return {'error': 'old_tag is required and cannot be empty', 'success': False}
+            return create_error_response('old_tag is required and cannot be empty')
         if not new_tag or not new_tag.strip():
-            return {'error': 'new_tag is required and cannot be empty', 'success': False}
+            return create_error_response('new_tag is required and cannot be empty')
 
-        # normalize tags
-        old_tag_normalized = normalize_tag(old_tag)
-        new_tag_normalized = normalize_tag(new_tag)
+        old_normalized = old_tag.strip().lower()
+        new_normalized = new_tag.strip().lower()
 
-        # check if tags are identical
-        if old_tag_normalized == new_tag_normalized:
-            return {'error': 'old_tag and new_tag cannot be the same', 'success': False}
+        with get_client() as client:
+            client.rename_tag(old_normalized, new_normalized)
 
-        pinboard_client = get_pinboard_client()
+        return create_success_response(
+            old_tag=old_normalized,
+            new_tag=new_normalized,
+            message=f"successfully renamed tag '{old_normalized}' to '{new_normalized}'"
+        )
 
-        logger.info(f'renaming tag: \'{old_tag_normalized}\' -> \'{new_tag_normalized}\'')
-
-        # rename the tag
-        rate_limit()
-        result = pinboard_client.tags.rename(old=old_tag_normalized, new=new_tag_normalized)
-
-        if result is not True:
-            logger.error(f'unexpected response from Pinboard API: {result}')
-            return {'error': 'failed to rename tag - unexpected API response', 'success': False}
-
-        # build response
-
-        response = {
-            'old_tag': old_tag_normalized,
-            'new_tag': new_tag_normalized,
-            'message': f'successfully renamed tag \'{old_tag_normalized}\' to \'{new_tag_normalized}\'',
-            'success': True
-        }
-
-        logger.info(f'successfully renamed tag: \'{old_tag_normalized}\' -> \'{new_tag_normalized}\'')
-        return response
-
+    except PinboardError as e:
+        logger.error(f'pinboard error renaming tag: {e}')
+        return format_error(e)
     except Exception as e:
-        logger.error(f'error renaming tag: {e}')
-        return {'error': str(e), 'success': False}
+        logger.exception(f'unexpected error renaming tag: {e}')
+        return create_error_response(f'Unexpected error: {e}')
 
 
-@mcp.tool
+@mcp.tool()
 def suggest_tags(url: str) -> Dict[str, Any]:
     '''
     get suggested tags for a URL from pinboard.
@@ -390,44 +321,35 @@ def suggest_tags(url: str) -> Dict[str, Any]:
         dictionary containing popular and recommended tag suggestions
     '''
     try:
-        # basic validation
         if not url or not url.strip():
-            return {'error': 'url is required and cannot be empty', 'success': False}
+            return create_error_response('url is required and cannot be empty')
 
         url = url.strip()
-        pinboard_client = get_pinboard_client()
 
-        logger.info(f'fetching tag suggestions for URL: {url}')
+        with get_client() as client:
+            suggestions = client.suggest_tags(url)
 
-        # get tag suggestions from Pinboard
-        rate_limit()
-        suggestions = pinboard_client.posts.suggest(url=url)
+        return create_success_response(
+            url=url,
+            popular=suggestions['popular'],
+            recommended=suggestions['recommended'],
+            popular_count=len(suggestions['popular']),
+            recommended_count=len(suggestions['recommended'])
+        )
 
-        # format suggestions
-        formatted = format_suggest_response(suggestions)
-
-        # build response
-
-        response = {
-            'url': url,
-            'popular': formatted['popular'],
-            'recommended': formatted['recommended'],
-            'popular_count': len(formatted['popular']),
-            'recommended_count': len(formatted['recommended']),
-            'success': True
-        }
-
-        logger.info(f'successfully retrieved {len(formatted["popular"])} popular and {len(formatted["recommended"])} recommended tags for {url}')
-        return response
-
+    except PinboardError as e:
+        logger.error(f'pinboard error getting tag suggestions: {e}')
+        return format_error(e)
     except Exception as e:
-        logger.error(f'error getting tag suggestions for {url}: {e}')
-        return {'error': str(e), 'success': False}
+        logger.exception(f'unexpected error getting tag suggestions: {e}')
+        return create_error_response(f'Unexpected error: {e}')
 
+
+# entry point
 
 def run():
-
-    import os
+    '''main entry point for the pinboard mcp server.'''
+    global _client
 
     logging.basicConfig(
         level=logging.DEBUG if os.getenv('LOG_LEVEL', 'info').lower() == 'debug' else logging.INFO,
@@ -435,29 +357,34 @@ def run():
         handlers=[logging.StreamHandler()]
     )
 
-    logger.info('starting Pinboard MCP server')
+    args = parse_args()
+
+    if not args.token:
+        logger.error('token is required (--token or PINBOARD_TOKEN env var)')
+        raise SystemExit(1)
+
+    logger.info('starting pinboard mcp server')
 
     try:
-        if not os.getenv('PINBOARD_TOKEN'):
-            logger.error('PINBOARD_TOKEN environment variable is required')
-            raise SystemExit(1)
+        # initialize and test client
+        _client = PinboardClient(args.token)
 
-        try:
-            pinboard_client = get_pinboard_client()
-
-            rate_limit()
-            pinboard_client.posts.update()
-            logger.info(f'successfully connected to Pinboard')
-
-        except Exception as e:
-            logger.error(f'failed to connect to Pinboard: {e}')
-            raise SystemExit(1)
+        with _client as client:
+            client.test_connection()
 
         mcp.run()
 
     except KeyboardInterrupt:
         logger.info('server shutdown requested')
 
+    except PinboardError as e:
+        logger.error(f'pinboard error: {e}')
+        raise SystemExit(1)
+
     except Exception as e:
         logger.error(f'server error: {e}')
         raise SystemExit(1)
+
+
+if __name__ == '__main__':
+    run()

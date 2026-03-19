@@ -1,19 +1,34 @@
 [project]
 name = "pinboard-mcp"
-version = "0.1.0"
-description = "MCP server for access to Pinboard.in bookmarks"
+version = "2.0.0"
+description = "MCP server for Pinboard.in bookmarks"
+authors = [
+    { name = "vic Garcia", email = "vic.garcia@outlook.com" }
+]
 requires-python = ">=3.12"
 dependencies = [
-    "fastmcp>=0.9.0",
+    "fastmcp>=2.0.0",
     "pinboard>=2.1.1",
     "python-dateutil>=2.8.0",
-    "pydantic>=2.0.0",
-    "httpx>=0.25.0"
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7.0.0",
 ]
 
 [project.scripts]
-pinboard-mcp = "pinboard_mcp.server:run"
+pinboard-mcp = "pinboard_mcp:run"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pinboard_mcp"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = ["-v"]
