@@ -84,9 +84,9 @@ def normalize_tag(tag: str) -> str:
     return tag.strip().lower()
 
 
-def format_tags_response(tags_raw: Dict[str, int]) -> List[TagInfo]:
-    '''format tags dictionary into sorted list of TagInfo.'''
-    tags = [TagInfo(name=name, count=count) for name, count in tags_raw.items()]
+def format_tags_response(tags_raw: List[Any]) -> List[TagInfo]:
+    '''format the pinboard library's Tag objects into sorted list of TagInfo.'''
+    tags = [TagInfo(name=tag.name, count=tag.count) for tag in tags_raw]
     tags.sort(key=lambda x: (-x.count, x.name))
     return tags
 

@@ -200,7 +200,8 @@ class PinboardClient:
             'extended': description,
             'tags': tags or [],
             'shared': not private,
-            'toread': toread
+            'toread': toread,
+            'replace': False  # pinboard defaults to overwriting an existing bookmark for this url
         }
 
         logger.info(f'adding bookmark: {title} -> {url}')
@@ -270,9 +271,9 @@ class PinboardClient:
             updates.append(f"description: '{old_desc}' -> '{description}'")
 
         if tags is not None:
-            old_tags = bookmark.tags
-            bookmark.tags = ' '.join(tags)
-            updates.append(f"tags: '{old_tags}' -> '{bookmark.tags}'")
+            old_tags = ' '.join(bookmark.tags)
+            bookmark.tags = tags
+            updates.append(f"tags: '{old_tags}' -> '{' '.join(tags)}'")
 
         if private is not None:
             old_shared = bookmark.shared
@@ -281,8 +282,8 @@ class PinboardClient:
 
         if toread is not None:
             old_toread = bookmark.toread
-            bookmark.toread = 'yes' if toread else 'no'
-            updates.append(f"toread: '{old_toread}' -> '{bookmark.toread}'")
+            bookmark.toread = toread
+            updates.append(f"toread: {old_toread} -> {toread}")
 
         if not updates:
             raise PinboardError(
@@ -293,7 +294,8 @@ class PinboardClient:
         logger.info(f'updating bookmark {url}: {", ".join(updates)}')
 
         self._rate_limit()
-        bookmark.save()
+        # without the original time, pinboard re-dates the bookmark to now
+        bookmark.save(update_time=True)
 
         logger.info(f'successfully updated bookmark: {url}')
         return Bookmark.from_api(bookmark), updates
