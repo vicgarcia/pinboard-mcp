@@ -28,7 +28,10 @@ class Bookmark:
         except Exception:
             pass
 
-        tags = bookmark.tags if isinstance(bookmark.tags, list) else []
+        if not isinstance(bookmark.tags, list):
+            raise ValueError(f'expected a list of tags, got {type(bookmark.tags).__name__}')
+        # the library splits an empty tag string into ['']
+        tags = [tag for tag in bookmark.tags if tag]
 
         return cls(
             url=bookmark.url,
@@ -56,6 +59,7 @@ class Bookmark:
             'tags': self.tags,
             'time': time_str,
             'private': self.private,
+            'toread': self.toread,
         }
 
 
@@ -64,6 +68,11 @@ class TagInfo:
     '''tag with usage count.'''
     name: str
     count: int
+
+    @classmethod
+    def from_api(cls, tag) -> 'TagInfo':
+        '''parse from pinboard api response object.'''
+        return cls(name=tag.name, count=tag.count)
 
     def to_dict(self) -> Dict[str, Any]:
         '''serialize for tool response.'''
@@ -82,13 +91,6 @@ def parse_tags(tags_str: Optional[str]) -> List[str]:
 def normalize_tag(tag: str) -> str:
     '''normalize a single tag (strip whitespace and lowercase).'''
     return tag.strip().lower()
-
-
-def format_tags_response(tags_raw: Dict[str, int]) -> List[TagInfo]:
-    '''format tags dictionary into sorted list of TagInfo.'''
-    tags = [TagInfo(name=name, count=count) for name, count in tags_raw.items()]
-    tags.sort(key=lambda x: (-x.count, x.name))
-    return tags
 
 
 def format_suggest_response(suggestions: List[Dict[str, Any]]) -> Dict[str, List[str]]:
