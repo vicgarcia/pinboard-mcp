@@ -59,6 +59,7 @@ class Bookmark:
             'tags': self.tags,
             'time': time_str,
             'private': self.private,
+            'toread': self.toread,
         }
 
 

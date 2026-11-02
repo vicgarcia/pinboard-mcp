@@ -109,7 +109,8 @@ class PinboardClient:
         start_date=None,
         end_date=None,
         tags: Optional[List[str]] = None,
-        limit: int = 200
+        limit: int = 200,
+        toread: Optional[bool] = None
     ) -> List[Bookmark]:
         '''
         retrieve bookmarks with optional filters.
@@ -119,13 +120,17 @@ class PinboardClient:
             end_date: filter by end date
             tags: filter by tags
             limit: maximum bookmarks to return (max 500)
+            toread: only to-read bookmarks if true, only read ones if false
 
         returns:
             list of Bookmark objects
         '''
         client = self._ensure_client()
 
-        api_params: Dict[str, Any] = {'results': limit}
+        api_params: Dict[str, Any] = {}
+        # pinboard can't filter on toread, so that filter runs before the limit here
+        if toread is None:
+            api_params['results'] = limit
         if tags:
             api_params['tag'] = tags
         if start_date:
@@ -138,6 +143,9 @@ class PinboardClient:
         self._rate_limit()
         bookmarks_raw = client.posts.all(**api_params)
         bookmarks = [Bookmark.from_api(b) for b in bookmarks_raw]
+
+        if toread is not None:
+            bookmarks = [b for b in bookmarks if b.toread == toread][:limit]
 
         logger.info(f'retrieved {len(bookmarks)} bookmarks')
         return bookmarks
