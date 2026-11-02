@@ -14,7 +14,6 @@ from pinboard_mcp.schema import (
     Bookmark,
     TagInfo,
     format_suggest_response,
-    format_tags_response,
     normalize_tag,
     parse_tags,
 )
@@ -316,7 +315,8 @@ class PinboardClient:
         self._rate_limit()
         tags_raw = client.tags.get()
 
-        tags = format_tags_response(tags_raw)
+        tags = [TagInfo.from_api(t) for t in tags_raw]
+        tags.sort(key=lambda x: (-x.count, x.name))
         logger.info(f'retrieved {len(tags)} tags')
         return tags
 

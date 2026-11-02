@@ -81,7 +81,7 @@ All tools respect Pinboard's 3-second rate limit.
 
 **schema.py** — Data models and utilities
 - `Bookmark` dataclass with `from_api()` and `to_dict()`
-- `TagInfo` dataclass for tag/count pairs
+- `TagInfo` dataclass with `from_api()` and `to_dict()` for tag/count pairs
 - Tag parsing and normalization utilities
 - Date validation with configurable max range
 - Standardized response helpers
