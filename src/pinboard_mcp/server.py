@@ -73,8 +73,7 @@ def get_bookmarks(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     tags: Optional[str] = None,
-    limit: int = 200,
-    toread: Optional[bool] = None
+    limit: int = 200
 ) -> Dict[str, Any]:
     '''
     retrieve bookmarks from pinboard within a specified date range
@@ -84,7 +83,6 @@ def get_bookmarks(
         end_date: end date in yyyy-mm-dd format (optional)
         tags: comma-separated tags to filter by (optional)
         limit: maximum bookmarks to return (default: 200, max: 500)
-        toread: true for only to-read bookmarks, false for only read ones (optional)
 
     returns:
         dictionary containing bookmarks and metadata
@@ -101,8 +99,7 @@ def get_bookmarks(
                 start_date=parsed_start,
                 end_date=parsed_end,
                 tags=tag_list,
-                limit=limit,
-                toread=toread
+                limit=limit
             )
 
         formatted_bookmarks = [b.to_dict() for b in bookmarks]
@@ -115,8 +112,6 @@ def get_bookmarks(
             }
         if tag_list:
             filters_applied['tags'] = ','.join(tag_list)
-        if toread is not None:
-            filters_applied['toread'] = toread
 
         return create_success_response(
             count=len(formatted_bookmarks),

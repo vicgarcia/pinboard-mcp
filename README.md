@@ -66,7 +66,6 @@ retrieve bookmarks within a date range
 - `end_date` (optional): end date in yyyy-mm-dd format
 - `tags` (optional): comma-separated tags to filter by
 - `limit` (optional): max bookmarks to return (default: 200, max: 500)
-- `toread` (optional): true for only to-read bookmarks, false for only read ones
 
 **constraints:**
 - date range cannot exceed 90 days
@@ -74,7 +73,6 @@ retrieve bookmarks within a date range
 
 **example usage in claude:**
 > "get my bookmarks from last week with the tag 'python'"
-> "what's on my to-read list?"
 
 #### add_bookmark
 

@@ -38,10 +38,6 @@ def posts(monkeypatch):
     return fake.posts
 
 
-def titles(result):
-    return [b['title'] for b in result['bookmarks']]
-
-
 def test_responses_show_toread(posts):
     result = server.get_bookmarks()
     assert [b['toread'] for b in result['bookmarks']] == [False, True, False, True]
@@ -58,23 +54,6 @@ def test_update_response_shows_toread(posts):
     assert server.update_bookmark(url, toread=False)['bookmark']['toread'] is False
 
 
-def test_filter_to_unread(posts):
-    result = server.get_bookmarks(toread=True)
-    assert titles(result) == ['unread-one', 'unread-two']
-    assert result['filters_applied']['toread'] is True
-
-
-def test_filter_to_read(posts):
-    assert titles(server.get_bookmarks(toread=False)) == ['newest', 'read']
-
-
-def test_limit_applies_after_the_filter(posts):
-    # the newest bookmark isn't to-read, so limiting first would find nothing
-    assert titles(server.get_bookmarks(toread=True, limit=1)) == ['unread-one']
-    assert 'results' not in posts.calls[-1]
-
-
-def test_without_a_filter_the_limit_goes_to_the_api(posts):
+def test_limit_goes_to_the_api(posts):
     server.get_bookmarks(limit=2)
     assert posts.calls[-1]['results'] == 2
-    assert 'toread' not in server.get_bookmarks()['filters_applied']
