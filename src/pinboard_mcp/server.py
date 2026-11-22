@@ -136,18 +136,18 @@ def add_bookmark(
     title: str,
     description: Optional[str] = None,
     tags: Optional[str] = None,
-    private: bool = False,
+    private: bool = True,
     toread: bool = False
 ) -> Dict[str, Any]:
     '''
-    create a new bookmark in pinboard.
+    create a new bookmark in pinboard. bookmarks are private by default.
 
     args:
         url: the web address to bookmark (required)
         title: the bookmark title/name (required)
         description: extended description or notes (optional)
         tags: comma-separated tags (optional)
-        private: set bookmark privacy - true for private, false for public (default: false)
+        private: false to make the bookmark public (default: true, private)
         toread: mark as to-read - true/false (default: false)
 
     returns:
@@ -204,7 +204,7 @@ def update_bookmark(
         title: new bookmark title (optional)
         description: new bookmark description (optional)
         tags: comma-separated tags (optional)
-        private: set bookmark privacy - true for private, false for public (optional)
+        private: true for private, false for public (optional, keeps existing visibility if omitted)
         toread: mark as to-read - true/false (optional)
 
     returns:

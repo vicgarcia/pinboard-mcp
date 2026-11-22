@@ -83,7 +83,7 @@ create a new bookmark
 - `title` (required): bookmark title
 - `description` (optional): extended description
 - `tags` (optional): comma-separated tags
-- `private` (optional): true for private, false for public (default: false)
+- `private` (optional): false to make the bookmark public (default: true, bookmarks are private by default)
 - `toread` (optional): mark as to-read (default: false)
 
 **example usage in claude:**
@@ -98,7 +98,7 @@ update an existing bookmark by url
 - `title` (optional): new title
 - `description` (optional): new description
 - `tags` (optional): new tags (replaces existing)
-- `private` (optional): change privacy setting
+- `private` (optional): change privacy setting, true for private, false for public (keeps existing visibility if omitted)
 - `toread` (optional): change to-read status
 
 **example usage in claude:**

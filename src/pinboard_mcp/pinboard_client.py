@@ -174,7 +174,7 @@ class PinboardClient:
         title: str,
         description: str = '',
         tags: Optional[List[str]] = None,
-        private: bool = False,
+        private: bool = True,
         toread: bool = False
     ) -> Bookmark:
         '''
@@ -185,7 +185,7 @@ class PinboardClient:
             title: the bookmark title
             description: extended description or notes
             tags: list of tags
-            private: set bookmark privacy
+            private: false to make the bookmark public (default: true)
             toread: mark as to-read
 
         returns:
@@ -240,7 +240,7 @@ class PinboardClient:
             title: new bookmark title
             description: new bookmark description
             tags: new tags list
-            private: set bookmark privacy
+            private: set bookmark privacy (keeps existing visibility if None)
             toread: mark as to-read
 
         returns:
