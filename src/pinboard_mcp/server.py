@@ -8,13 +8,15 @@ retrieval, creation, updating, and tag management.
 import argparse
 import logging
 import os
-from typing import Any, Dict, List, Optional
+from typing import Annotated, Any, Dict, List, Optional
 
 from fastmcp import FastMCP
+from fastmcp.exceptions import ToolError
+from mcp.types import ToolAnnotations
+from pydantic import Field
 
 from pinboard_mcp.pinboard_client import PinboardClient, PinboardError
 from pinboard_mcp.schema import (
-    create_error_response,
     create_success_response,
     parse_tags,
     validate_date_range,
@@ -56,40 +58,70 @@ def get_client() -> PinboardClient:
     return _client
 
 
-def format_error(error: Exception) -> Dict[str, Any]:
-    '''format an exception as an error response.'''
-    return create_error_response(str(error))
+def tool_error(message: str) -> ToolError:
+    '''a tool error to raise, so the client sees the call failed.'''
+    return ToolError(message)
 
 
 # mcp server
 
-mcp = FastMCP('pinboard MCP')
+# guidance sent to clients as the server instructions
+
+INSTRUCTIONS = '''
+these tools work on the user's pinboard bookmarks.
+
+- bookmarks are private by default; pass private=false to add_bookmark only when the user
+  asks for a public bookmark.
+- when the user asks about their bookmarks, don't read the whole list back: share a few
+  high-value examples, then answer questions from the rest. get_bookmarks filters by tag
+  and date; there is no keyword search.
+- when adding a bookmark, tag it the way the user already does: check get_tags (and
+  suggest_tags for the url) rather than inventing new tags.
+- add_bookmark fails if the url is already bookmarked; use update_bookmark to change it.
+- rename_tag changes every bookmark with that tag, and renaming onto a tag that already
+  exists combines the two. confirm the old and new names with the user before calling it.
+'''
+
+# tool annotations: whether a tool only reads, and whether a write can overwrite or remove
+# existing data. every tool works on the user's own bookmarks, so none is open world.
+
+READ_ONLY = ToolAnnotations(readOnlyHint=True, openWorldHint=False)
+ADDS = ToolAnnotations(readOnlyHint=False, destructiveHint=False, openWorldHint=False)
+CHANGES = ToolAnnotations(readOnlyHint=False, destructiveHint=True, openWorldHint=False)
+
+# argument descriptions shared by several tools
+
+Url = Annotated[str, Field(description='the full URL, including https://')]
+Tags = Annotated[Optional[str], Field(description='comma-separated tags, e.g. "recipes,bread"')]
+
+mcp = FastMCP('pinboard MCP', instructions=INSTRUCTIONS)
 
 
 # bookmark tools
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def get_bookmarks(
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
-    tags: Optional[str] = None,
-    limit: int = 200
+    start_date: Annotated[Optional[str], Field(description='the earliest date, as YYYY-MM-DD')] = None,
+    end_date: Annotated[Optional[str], Field(description='the latest date, as YYYY-MM-DD')] = None,
+    tags: Annotated[Optional[str], Field(
+        description='comma-separated tags, e.g. "recipes,bread"; up to three, and a bookmark '
+                    'must have all of them'
+    )] = None,
+    limit: Annotated[int, Field(description='how many to fetch, from 1 to 500')] = 200,
 ) -> Dict[str, Any]:
     '''
-    retrieve bookmarks from pinboard within a specified date range
+    List the user's bookmarks, newest first, filtered by tag and date.
 
-    args:
-        start_date: start date in yyyy-mm-dd format (optional)
-        end_date: end date in yyyy-mm-dd format (optional)
-        tags: comma-separated tags to filter by (optional)
-        limit: maximum bookmarks to return (default: 200, max: 500)
+    There is no keyword search: narrow by tag (get_tags lists them) and date, then look
+    through the results. Don't read the whole list back to the user; share a few
+    high-value examples, then answer questions from the rest.
 
-    returns:
-        dictionary containing bookmarks and metadata
+    Returns a dictionary with the bookmarks, each with its url, title, description, tags
+    and time, and the filters applied.
     '''
     try:
         if limit <= 0 or limit > 500:
-            return create_error_response('limit must be between 1 and 500')
+            raise tool_error('limit must be between 1 and 500')
 
         parsed_start, parsed_end = validate_date_range(start_date, end_date)
         tag_list = parse_tags(tags)
@@ -121,43 +153,44 @@ def get_bookmarks(
 
     except ValueError as e:
         logger.error(f'validation error: {e}')
-        return create_error_response(str(e))
+        raise tool_error(str(e))
     except PinboardError as e:
         logger.error(f'pinboard error retrieving bookmarks: {e}')
-        return format_error(e)
+        raise tool_error(str(e))
+    except ToolError:
+        raise  # already a tool error with its own message
     except Exception as e:
         logger.exception(f'unexpected error retrieving bookmarks: {e}')
-        return create_error_response(f'Unexpected error: {e}')
+        raise tool_error(f'Unexpected error: {e}')
 
 
-@mcp.tool()
+@mcp.tool(annotations=ADDS)
 def add_bookmark(
-    url: str,
-    title: str,
-    description: Optional[str] = None,
-    tags: Optional[str] = None,
-    private: bool = True,
-    toread: bool = False
+    url: Url,
+    title: Annotated[str, Field(description='the bookmark title')],
+    description: Annotated[Optional[str], Field(description='notes on the bookmark')] = None,
+    tags: Annotated[Optional[str], Field(
+        description='comma-separated tags, e.g. "recipes,bread"; prefer tags the user already has'
+    )] = None,
+    private: Annotated[bool, Field(
+        description='false only when the user asks for a public bookmark'
+    )] = True,
+    toread: Annotated[bool, Field(description='true to mark it as to read')] = False,
 ) -> Dict[str, Any]:
     '''
-    create a new bookmark in pinboard. bookmarks are private by default.
+    Save a new bookmark. Bookmarks are private unless private is false.
 
-    args:
-        url: the web address to bookmark (required)
-        title: the bookmark title/name (required)
-        description: extended description or notes (optional)
-        tags: comma-separated tags (optional)
-        private: false to make the bookmark public (default: true, private)
-        toread: mark as to-read - true/false (default: false)
+    Fails if the URL is already bookmarked; use update_bookmark to change that one. Tag it
+    the way the user already does: check get_tags, and suggest_tags for the URL, rather
+    than inventing new tags.
 
-    returns:
-        dictionary containing the created bookmark data and metadata
+    Returns a dictionary with the created bookmark.
     '''
     try:
         if not url or not url.strip():
-            return create_error_response('url is required')
+            raise tool_error('url is required')
         if not title or not title.strip():
-            return create_error_response('title is required')
+            raise tool_error('title is required')
 
         url = url.strip()
         title = title.strip()
@@ -181,38 +214,41 @@ def add_bookmark(
 
     except PinboardError as e:
         logger.error(f'pinboard error creating bookmark: {e}')
-        return format_error(e)
+        raise tool_error(str(e))
+    except ToolError:
+        raise  # already a tool error with its own message
     except Exception as e:
         logger.exception(f'unexpected error creating bookmark: {e}')
-        return create_error_response(f'Unexpected error: {e}')
+        raise tool_error(f'Unexpected error: {e}')
 
 
-@mcp.tool()
+@mcp.tool(annotations=CHANGES)
 def update_bookmark(
-    url: str,
-    title: Optional[str] = None,
-    description: Optional[str] = None,
-    tags: Optional[str] = None,
-    private: Optional[bool] = None,
-    toread: Optional[bool] = None
+    url: Annotated[str, Field(description='the URL of the bookmark, from get_bookmarks')],
+    title: Annotated[Optional[str], Field(description='the new title')] = None,
+    description: Annotated[Optional[str], Field(
+        description='new notes, replacing the existing notes'
+    )] = None,
+    tags: Annotated[Optional[str], Field(
+        description='comma-separated tags, replacing all existing tags'
+    )] = None,
+    private: Annotated[Optional[bool], Field(
+        description='true for private, false for public; the current visibility is kept if left out'
+    )] = None,
+    toread: Annotated[Optional[bool], Field(
+        description='true to mark it as to read, false to clear that'
+    )] = None,
 ) -> Dict[str, Any]:
     '''
-    update a bookmark's properties by URL
+    Change a bookmark, found by its URL.
 
-    args:
-        url: the URL of the bookmark to update (required)
-        title: new bookmark title (optional)
-        description: new bookmark description (optional)
-        tags: comma-separated tags (optional)
-        private: true for private, false for public (optional, keeps existing visibility if omitted)
-        toread: mark as to-read - true/false (optional)
+    Only the arguments given change; new values replace the old ones.
 
-    returns:
-        dictionary containing updated bookmark data and metadata
+    Returns a dictionary with the updated bookmark and what changed.
     '''
     try:
         if not url or not url.strip():
-            return create_error_response('url is required and cannot be empty')
+            raise tool_error('url is required and cannot be empty')
 
         url = url.strip()
         tag_list = parse_tags(tags) if tags is not None else None
@@ -236,21 +272,25 @@ def update_bookmark(
 
     except PinboardError as e:
         logger.error(f'pinboard error updating bookmark: {e}')
-        return format_error(e)
+        raise tool_error(str(e))
+    except ToolError:
+        raise  # already a tool error with its own message
     except Exception as e:
         logger.exception(f'unexpected error updating bookmark: {e}')
-        return create_error_response(f'Unexpected error: {e}')
+        raise tool_error(f'Unexpected error: {e}')
 
 
 # tag tools
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def get_tags() -> Dict[str, Any]:
     '''
-    retrieve all tags from pinboard with usage counts.
+    List every tag the user has, with how many bookmarks use it, most used first.
 
-    returns:
-        dictionary containing tags and metadata
+    Use it to pick existing tags when adding or updating a bookmark, to filter
+    get_bookmarks, and to answer what the user bookmarks most.
+
+    Returns a dictionary with the tags, each with its tag and count.
     '''
     try:
         with get_client() as client:
@@ -265,29 +305,32 @@ def get_tags() -> Dict[str, Any]:
 
     except PinboardError as e:
         logger.error(f'pinboard error retrieving tags: {e}')
-        return format_error(e)
+        raise tool_error(str(e))
+    except ToolError:
+        raise  # already a tool error with its own message
     except Exception as e:
         logger.exception(f'unexpected error retrieving tags: {e}')
-        return create_error_response(f'Unexpected error: {e}')
+        raise tool_error(f'Unexpected error: {e}')
 
 
-@mcp.tool()
-def rename_tag(old_tag: str, new_tag: str) -> Dict[str, Any]:
+@mcp.tool(annotations=CHANGES)
+def rename_tag(
+    old_tag: Annotated[str, Field(description='the tag as it is now, from get_tags')],
+    new_tag: Annotated[str, Field(description='the new name')],
+) -> Dict[str, Any]:
     '''
-    rename a tag across all bookmarks.
+    Rename a tag on every bookmark that has it.
 
-    args:
-        old_tag: the existing tag name to rename (required)
-        new_tag: the new tag name (required)
+    Confirm the old and new names with the user first: renaming onto a tag that already
+    exists combines the two.
 
-    returns:
-        dictionary containing rename operation result and metadata
+    Returns a dictionary with the result of the rename.
     '''
     try:
         if not old_tag or not old_tag.strip():
-            return create_error_response('old_tag is required and cannot be empty')
+            raise tool_error('old_tag is required and cannot be empty')
         if not new_tag or not new_tag.strip():
-            return create_error_response('new_tag is required and cannot be empty')
+            raise tool_error('new_tag is required and cannot be empty')
 
         old_normalized = old_tag.strip().lower()
         new_normalized = new_tag.strip().lower()
@@ -303,26 +346,25 @@ def rename_tag(old_tag: str, new_tag: str) -> Dict[str, Any]:
 
     except PinboardError as e:
         logger.error(f'pinboard error renaming tag: {e}')
-        return format_error(e)
+        raise tool_error(str(e))
+    except ToolError:
+        raise  # already a tool error with its own message
     except Exception as e:
         logger.exception(f'unexpected error renaming tag: {e}')
-        return create_error_response(f'Unexpected error: {e}')
+        raise tool_error(f'Unexpected error: {e}')
 
 
-@mcp.tool()
-def suggest_tags(url: str) -> Dict[str, Any]:
+@mcp.tool(annotations=READ_ONLY)
+def suggest_tags(url: Url) -> Dict[str, Any]:
     '''
-    get suggested tags for a URL from pinboard.
+    Get Pinboard's suggested tags for a URL: popular ones across Pinboard, and recommended
+    ones the user has used before.
 
-    args:
-        url: the web address to get tag suggestions for (required)
-
-    returns:
-        dictionary containing popular and recommended tag suggestions
+    Returns a dictionary with the popular and recommended tags.
     '''
     try:
         if not url or not url.strip():
-            return create_error_response('url is required and cannot be empty')
+            raise tool_error('url is required and cannot be empty')
 
         url = url.strip()
 
@@ -339,10 +381,12 @@ def suggest_tags(url: str) -> Dict[str, Any]:
 
     except PinboardError as e:
         logger.error(f'pinboard error getting tag suggestions: {e}')
-        return format_error(e)
+        raise tool_error(str(e))
+    except ToolError:
+        raise  # already a tool error with its own message
     except Exception as e:
         logger.exception(f'unexpected error getting tag suggestions: {e}')
-        return create_error_response(f'Unexpected error: {e}')
+        raise tool_error(f'Unexpected error: {e}')
 
 
 # entry point

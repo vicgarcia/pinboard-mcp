@@ -158,11 +158,6 @@ def validate_date_range(
 
 # response helpers
 
-def create_error_response(message: str) -> Dict[str, Any]:
-    '''create a standardized error response.'''
-    return {'error': message, 'success': False}
-
-
 def create_success_response(**kwargs) -> Dict[str, Any]:
     '''create a standardized success response with optional data.'''
     return {'success': True, **kwargs}

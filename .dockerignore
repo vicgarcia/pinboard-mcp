@@ -1,7 +1,0 @@
-.git/
-.github/
-.gitignore
-.venv/
-__pycache__/
-*.pyc
-*.md

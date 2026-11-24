@@ -13,8 +13,8 @@ pinboard-mcp/
 │   ├── schema.py           # Bookmark dataclass, tag utilities, response helpers
 │   ├── pinboard_client.py  # PinboardClient context manager with rate limiting
 │   └── server.py           # FastMCP server, tools, arg parsing, entry point
+├── tests/                  # pytest suite; test_tool_metadata.py covers what clients see
 ├── pyproject.toml          # package metadata and dependencies
-├── Dockerfile              # docker deployment
 ├── README.md               # user-facing documentation
 └── CLAUDE.md               # this file
 ```
@@ -32,7 +32,6 @@ pinboard-mcp/
 ```bash
 uv tool install --editable .                    # install in dev mode
 PINBOARD_TOKEN=user:token pinboard-mcp          # run
-docker build -t pinboard-mcp:local .            # build docker image
 ```
 
 ### Installation
@@ -93,7 +92,9 @@ All tools respect Pinboard's 3-second rate limit.
 - `PinboardError` exception class
 
 **server.py** — MCP server
-- FastMCP instance with 6 tool definitions
+- INSTRUCTIONS, annotation constants, shared argument types, FastMCP instance with 6 @mcp.tool(annotations=...) definitions
+
+**What clients see.** Set in server.py, not left to a gateway: `INSTRUCTIONS` is passed as the FastMCP server `instructions` and names tools only by their real names; every tool has `ToolAnnotations` (`READ_ONLY`, `ADDS` = not destructive, `CHANGES` = destructive, all `openWorldHint=False`); every argument is `Annotated[..., Field(description=...)]`, so docstrings carry no `args:` block and the schema doesn't depend on the fastmcp version parsing docstrings. `tests/test_tool_metadata.py` enforces this. Docstrings say what a tool returns in a closing sentence ("Returns a dictionary with ..."), not a `Returns:` section, and give examples after "For example:", not an `Example:` section: fastmcp 4 strips those sections from tool descriptions.
 - Argument parsing and entry point
 - Error handling and response formatting
 
@@ -128,4 +129,4 @@ run()
 ### Naming & Style
 - Descriptive variable names (`pinboard_client` not `pb`)
 - Lowercase log messages except proper names (Pinboard, API, URL)
-- Consistent error responses: `{"error": "message", "success": False}`
+- Errors are raised, not returned: `raise tool_error(message)` raises a fastmcp `ToolError`, so clients get `isError: true`

@@ -15,7 +15,7 @@ Once set up, you can make queries like:
 
 go to [pinboard settings](https://pinboard.in/settings/password) and copy your api token (format: `username:1234567890ABCDEF1234567890ABCDEF`)
 
-#### option 1: install with uv
+#### install with uv
 
 ```bash
 uv tool install git+https://github.com/vicgarcia/pinboard-mcp
@@ -29,23 +29,6 @@ claude desktop config:
     "pinboard": {
       "command": "pinboard-mcp",
       "args": ["--token", "username:token"]
-    }
-  }
-}
-```
-
-#### option 2: docker
-
-```json
-{
-  "mcpServers": {
-    "pinboard": {
-      "command": "docker",
-      "args": [
-        "run", "-i", "--rm",
-        "-e", "PINBOARD_TOKEN=username:token",
-        "ghcr.io/vicgarcia/pinboard-mcp:latest"
-      ]
     }
   }
 }
@@ -158,22 +141,22 @@ uv tool install --editable .
 
 # run
 PINBOARD_TOKEN=user:token pinboard-mcp
+
+# run tests
+uv run --extra test pytest
 ```
 
 #### project structure
 
 ```
 pinboard-mcp/
-├── pinboard_mcp.py   # single-file module (server + all logic)
-├── pyproject.toml    # package metadata and dependencies
-├── Dockerfile        # docker deployment
+├── src/pinboard_mcp/
+│   ├── __init__.py         # version and run() export
+│   ├── schema.py           # bookmark dataclass, tag utilities, response helpers
+│   ├── pinboard_client.py  # pinboard api client with rate limiting
+│   └── server.py           # fastmcp server, tools, arg parsing, entry point
+├── tests/
+├── pyproject.toml          # package metadata and dependencies
+├── CHANGELOG.md
 └── README.md
 ```
-
-#### building docker image locally
-
-```bash
-docker build -t pinboard-mcp:local .
-```
-
-to use the local build in claude desktop, update your mcp settings to use `pinboard-mcp:local` instead of `ghcr.io/vicgarcia/pinboard-mcp:latest`.

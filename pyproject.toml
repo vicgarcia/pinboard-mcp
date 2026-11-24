@@ -1,14 +1,15 @@
 [project]
 name = "pinboard-mcp"
-version = "2.1.0"
+version = "2.2.0"
 description = "MCP server for Pinboard.in bookmarks"
 authors = [
     { name = "vic Garcia", email = "vic.garcia@outlook.com" }
 ]
 requires-python = ">=3.12"
 dependencies = [
-    "fastmcp>=2.0.0",
+    "fastmcp>=3.0.0",
     "pinboard>=2.1.1",
+    "pydantic>=2.0",
     "python-dateutil>=2.8.0",
 ]
 
