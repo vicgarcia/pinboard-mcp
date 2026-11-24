@@ -64,3 +64,9 @@ def test_instructions_cover_privacy_tags_and_renames():
     assert 'private=false' in instructions
     for tool in ('get_tags', 'suggest_tags', 'rename_tag', 'update_bookmark'):
         assert tool in instructions
+
+
+def test_descriptions_say_what_each_tool_returns(tools):
+    # in prose, not a Returns: section, which fastmcp 4 strips from descriptions
+    for tool in tools:
+        assert 'Returns ' in tool.description, tool.name

@@ -116,9 +116,8 @@ def get_bookmarks(
     through the results. Don't read the whole list back to the user; share a few
     high-value examples, then answer questions from the rest.
 
-    Returns:
-        Dictionary with the bookmarks, each with its url, title, description, tags and
-        time, and the filters applied
+    Returns a dictionary with the bookmarks, each with its url, title, description, tags
+    and time, and the filters applied.
     '''
     try:
         if limit <= 0 or limit > 500:
@@ -183,8 +182,7 @@ def add_bookmark(
     the way the user already does: check get_tags, and suggest_tags for the URL, rather
     than inventing new tags.
 
-    Returns:
-        Dictionary with the created bookmark
+    Returns a dictionary with the created bookmark.
     '''
     try:
         if not url or not url.strip():
@@ -242,8 +240,7 @@ def update_bookmark(
 
     Only the arguments given change; new values replace the old ones.
 
-    Returns:
-        Dictionary with the updated bookmark and what changed
+    Returns a dictionary with the updated bookmark and what changed.
     '''
     try:
         if not url or not url.strip():
@@ -287,8 +284,7 @@ def get_tags() -> Dict[str, Any]:
     Use it to pick existing tags when adding or updating a bookmark, to filter
     get_bookmarks, and to answer what the user bookmarks most.
 
-    Returns:
-        Dictionary with the tags, each with its tag and count
+    Returns a dictionary with the tags, each with its tag and count.
     '''
     try:
         with get_client() as client:
@@ -320,8 +316,7 @@ def rename_tag(
     Confirm the old and new names with the user first: renaming onto a tag that already
     exists combines the two.
 
-    Returns:
-        Dictionary with the result of the rename
+    Returns a dictionary with the result of the rename.
     '''
     try:
         if not old_tag or not old_tag.strip():
@@ -355,8 +350,7 @@ def suggest_tags(url: Url) -> Dict[str, Any]:
     Get Pinboard's suggested tags for a URL: popular ones across Pinboard, and recommended
     ones the user has used before.
 
-    Returns:
-        Dictionary with the popular and recommended tags
+    Returns a dictionary with the popular and recommended tags.
     '''
     try:
         if not url or not url.strip():
