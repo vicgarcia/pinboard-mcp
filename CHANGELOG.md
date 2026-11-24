@@ -5,6 +5,10 @@ or changes; none open world), a fuller description, and a schema description for
 declared with `Field` so it no longer depends on the fastmcp version. Requires `fastmcp>=3.0.0` and
 declares `pydantic>=2.0`.
 
+A failed call is now a tool error (`isError: true`) instead of a normal result holding
+`{"error": ..., "success": false}`; successful results are unchanged. Removed the docker image, its
+build workflow and the docker install option; install with `uv tool install`.
+
 ## v2.1.0
 New bookmarks are private by default. `add_bookmark` creates a private bookmark unless
 `private=false` is passed. `update_bookmark` keeps the existing visibility when `private` is omitted.

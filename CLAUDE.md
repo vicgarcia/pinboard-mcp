@@ -15,7 +15,6 @@ pinboard-mcp/
 │   └── server.py           # FastMCP server, tools, arg parsing, entry point
 ├── tests/                  # pytest suite; test_tool_metadata.py covers what clients see
 ├── pyproject.toml          # package metadata and dependencies
-├── Dockerfile              # docker deployment
 ├── README.md               # user-facing documentation
 └── CLAUDE.md               # this file
 ```
@@ -33,7 +32,6 @@ pinboard-mcp/
 ```bash
 uv tool install --editable .                    # install in dev mode
 PINBOARD_TOKEN=user:token pinboard-mcp          # run
-docker build -t pinboard-mcp:local .            # build docker image
 ```
 
 ### Installation
@@ -131,4 +129,4 @@ run()
 ### Naming & Style
 - Descriptive variable names (`pinboard_client` not `pb`)
 - Lowercase log messages except proper names (Pinboard, API, URL)
-- Consistent error responses: `{"error": "message", "success": False}`
+- Errors are raised, not returned: `raise tool_error(message)` raises a fastmcp `ToolError`, so clients get `isError: true`

@@ -11,12 +11,12 @@ import os
 from typing import Annotated, Any, Dict, List, Optional
 
 from fastmcp import FastMCP
+from fastmcp.exceptions import ToolError
 from mcp.types import ToolAnnotations
 from pydantic import Field
 
 from pinboard_mcp.pinboard_client import PinboardClient, PinboardError
 from pinboard_mcp.schema import (
-    create_error_response,
     create_success_response,
     parse_tags,
     validate_date_range,
@@ -58,9 +58,9 @@ def get_client() -> PinboardClient:
     return _client
 
 
-def format_error(error: Exception) -> Dict[str, Any]:
-    '''format an exception as an error response.'''
-    return create_error_response(str(error))
+def tool_error(message: str) -> ToolError:
+    '''a tool error to raise, so the client sees the call failed.'''
+    return ToolError(message)
 
 
 # mcp server
@@ -121,7 +121,7 @@ def get_bookmarks(
     '''
     try:
         if limit <= 0 or limit > 500:
-            return create_error_response('limit must be between 1 and 500')
+            raise tool_error('limit must be between 1 and 500')
 
         parsed_start, parsed_end = validate_date_range(start_date, end_date)
         tag_list = parse_tags(tags)
@@ -153,13 +153,15 @@ def get_bookmarks(
 
     except ValueError as e:
         logger.error(f'validation error: {e}')
-        return create_error_response(str(e))
+        raise tool_error(str(e))
     except PinboardError as e:
         logger.error(f'pinboard error retrieving bookmarks: {e}')
-        return format_error(e)
+        raise tool_error(str(e))
+    except ToolError:
+        raise  # already a tool error with its own message
     except Exception as e:
         logger.exception(f'unexpected error retrieving bookmarks: {e}')
-        return create_error_response(f'Unexpected error: {e}')
+        raise tool_error(f'Unexpected error: {e}')
 
 
 @mcp.tool(annotations=ADDS)
@@ -186,9 +188,9 @@ def add_bookmark(
     '''
     try:
         if not url or not url.strip():
-            return create_error_response('url is required')
+            raise tool_error('url is required')
         if not title or not title.strip():
-            return create_error_response('title is required')
+            raise tool_error('title is required')
 
         url = url.strip()
         title = title.strip()
@@ -212,10 +214,12 @@ def add_bookmark(
 
     except PinboardError as e:
         logger.error(f'pinboard error creating bookmark: {e}')
-        return format_error(e)
+        raise tool_error(str(e))
+    except ToolError:
+        raise  # already a tool error with its own message
     except Exception as e:
         logger.exception(f'unexpected error creating bookmark: {e}')
-        return create_error_response(f'Unexpected error: {e}')
+        raise tool_error(f'Unexpected error: {e}')
 
 
 @mcp.tool(annotations=CHANGES)
@@ -244,7 +248,7 @@ def update_bookmark(
     '''
     try:
         if not url or not url.strip():
-            return create_error_response('url is required and cannot be empty')
+            raise tool_error('url is required and cannot be empty')
 
         url = url.strip()
         tag_list = parse_tags(tags) if tags is not None else None
@@ -268,10 +272,12 @@ def update_bookmark(
 
     except PinboardError as e:
         logger.error(f'pinboard error updating bookmark: {e}')
-        return format_error(e)
+        raise tool_error(str(e))
+    except ToolError:
+        raise  # already a tool error with its own message
     except Exception as e:
         logger.exception(f'unexpected error updating bookmark: {e}')
-        return create_error_response(f'Unexpected error: {e}')
+        raise tool_error(f'Unexpected error: {e}')
 
 
 # tag tools
@@ -299,10 +305,12 @@ def get_tags() -> Dict[str, Any]:
 
     except PinboardError as e:
         logger.error(f'pinboard error retrieving tags: {e}')
-        return format_error(e)
+        raise tool_error(str(e))
+    except ToolError:
+        raise  # already a tool error with its own message
     except Exception as e:
         logger.exception(f'unexpected error retrieving tags: {e}')
-        return create_error_response(f'Unexpected error: {e}')
+        raise tool_error(f'Unexpected error: {e}')
 
 
 @mcp.tool(annotations=CHANGES)
@@ -320,9 +328,9 @@ def rename_tag(
     '''
     try:
         if not old_tag or not old_tag.strip():
-            return create_error_response('old_tag is required and cannot be empty')
+            raise tool_error('old_tag is required and cannot be empty')
         if not new_tag or not new_tag.strip():
-            return create_error_response('new_tag is required and cannot be empty')
+            raise tool_error('new_tag is required and cannot be empty')
 
         old_normalized = old_tag.strip().lower()
         new_normalized = new_tag.strip().lower()
@@ -338,10 +346,12 @@ def rename_tag(
 
     except PinboardError as e:
         logger.error(f'pinboard error renaming tag: {e}')
-        return format_error(e)
+        raise tool_error(str(e))
+    except ToolError:
+        raise  # already a tool error with its own message
     except Exception as e:
         logger.exception(f'unexpected error renaming tag: {e}')
-        return create_error_response(f'Unexpected error: {e}')
+        raise tool_error(f'Unexpected error: {e}')
 
 
 @mcp.tool(annotations=READ_ONLY)
@@ -354,7 +364,7 @@ def suggest_tags(url: Url) -> Dict[str, Any]:
     '''
     try:
         if not url or not url.strip():
-            return create_error_response('url is required and cannot be empty')
+            raise tool_error('url is required and cannot be empty')
 
         url = url.strip()
 
@@ -371,10 +381,12 @@ def suggest_tags(url: Url) -> Dict[str, Any]:
 
     except PinboardError as e:
         logger.error(f'pinboard error getting tag suggestions: {e}')
-        return format_error(e)
+        raise tool_error(str(e))
+    except ToolError:
+        raise  # already a tool error with its own message
     except Exception as e:
         logger.exception(f'unexpected error getting tag suggestions: {e}')
-        return create_error_response(f'Unexpected error: {e}')
+        raise tool_error(f'Unexpected error: {e}')
 
 
 # entry point

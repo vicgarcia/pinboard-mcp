@@ -70,3 +70,15 @@ def test_descriptions_say_what_each_tool_returns(tools):
     # in prose, not a Returns: section, which fastmcp 4 strips from descriptions
     for tool in tools:
         assert 'Returns ' in tool.description, tool.name
+
+
+def test_a_failed_call_reaches_the_client_as_an_error():
+    # an error, not a normal result holding {error, success: false}
+    from fastmcp import Client
+
+    async def run():
+        async with Client(server.mcp) as client:
+            return await client.call_tool('get_bookmarks', {'limit': 0}, raise_on_error=False)
+    result = asyncio.run(run())
+    assert result.is_error is True
+    assert result.content[0].text == 'limit must be between 1 and 500'
