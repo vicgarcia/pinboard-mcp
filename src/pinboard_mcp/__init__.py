@@ -2,7 +2,7 @@
 pinboard-mcp: MCP server for Pinboard.in bookmarks.
 '''
 
-__version__ = '2.1.0'
+__version__ = '2.2.0'
 
 from pinboard_mcp.server import run
 

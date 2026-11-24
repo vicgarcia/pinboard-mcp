@@ -13,6 +13,7 @@ pinboard-mcp/
 │   ├── schema.py           # Bookmark dataclass, tag utilities, response helpers
 │   ├── pinboard_client.py  # PinboardClient context manager with rate limiting
 │   └── server.py           # FastMCP server, tools, arg parsing, entry point
+├── tests/                  # pytest suite; test_tool_metadata.py covers what clients see
 ├── pyproject.toml          # package metadata and dependencies
 ├── Dockerfile              # docker deployment
 ├── README.md               # user-facing documentation
@@ -93,7 +94,9 @@ All tools respect Pinboard's 3-second rate limit.
 - `PinboardError` exception class
 
 **server.py** — MCP server
-- FastMCP instance with 6 tool definitions
+- INSTRUCTIONS, annotation constants, shared argument types, FastMCP instance with 6 @mcp.tool(annotations=...) definitions
+
+**What clients see.** Set in server.py, not left to a gateway: `INSTRUCTIONS` is passed as the FastMCP server `instructions` and names tools only by their real names; every tool has `ToolAnnotations` (`READ_ONLY`, `ADDS` = not destructive, `CHANGES` = destructive, all `openWorldHint=False`); every argument is `Annotated[..., Field(description=...)]`, so docstrings carry no `args:` block and the schema doesn't depend on the fastmcp version parsing docstrings. `tests/test_tool_metadata.py` enforces this.
 - Argument parsing and entry point
 - Error handling and response formatting
 
