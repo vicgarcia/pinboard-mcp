@@ -72,6 +72,9 @@ these tools work on the user's pinboard bookmarks.
 
 - bookmarks are private by default; pass private=false to add_bookmark only when the user
   asks for a public bookmark.
+- "read later" or "to read" means the bookmark's toread flag: pass toread=true when the
+  user saves a link to read later, and clear it with update_bookmark once they've read it.
+  their read later list is the bookmarks from get_bookmarks with toread true.
 - when the user asks about their bookmarks, don't read the whole list back: share a few
   high-value examples, then answer questions from the rest. get_bookmarks filters by tag
   and date; there is no keyword search.
@@ -116,8 +119,8 @@ def get_bookmarks(
     through the results. Don't read the whole list back to the user; share a few
     high-value examples, then answer questions from the rest.
 
-    Returns a dictionary with the bookmarks, each with its url, title, description, tags
-    and time, and the filters applied.
+    Returns a dictionary with the bookmarks, each with its url, title, description, tags,
+    time and toread flag, and the filters applied.
     '''
     try:
         if limit <= 0 or limit > 500:
@@ -175,7 +178,9 @@ def add_bookmark(
     private: Annotated[bool, Field(
         description='false only when the user asks for a public bookmark'
     )] = True,
-    toread: Annotated[bool, Field(description='true to mark it as to read')] = False,
+    toread: Annotated[bool, Field(
+        description='true when the user saves it to read later'
+    )] = False,
 ) -> Dict[str, Any]:
     '''
     Save a new bookmark. Bookmarks are private unless private is false.

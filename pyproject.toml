@@ -1,6 +1,6 @@
 [project]
 name = "pinboard-mcp"
-version = "2.2.0"
+version = "2.2.1"
 description = "MCP server for Pinboard.in bookmarks"
 authors = [
     { name = "vic Garcia", email = "vic.garcia@outlook.com" }
